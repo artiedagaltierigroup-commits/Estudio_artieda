@@ -1,0 +1,71 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 330 100% 99%;
+    --foreground: 315 8% 29%;
+    --card: 0 0% 100%;
+    --card-foreground: 315 8% 29%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 315 8% 29%;
+    --primary: 339 62% 76%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 338 69% 91%;
+    --secondary-foreground: 315 8% 29%;
+    --muted: 330 25% 96%;
+    --muted-foreground: 329 6% 51%;
+    --accent: 268 44% 80%;
+    --accent-foreground: 315 8% 29%;
+    --destructive: 0 59% 64%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 333 30% 88%;
+    --input: 333 30% 88%;
+    --ring: 336 46% 60%;
+    --radius: 1rem;
+  }
+
+  .dark {
+    --background: 325 18% 12%;
+    --foreground: 330 35% 96%;
+    --card: 324 18% 15%;
+    --card-foreground: 330 35% 96%;
+    --popover: 324 18% 15%;
+    --popover-foreground: 330 35% 96%;
+    --primary: 339 47% 60%;
+    --primary-foreground: 330 35% 96%;
+    --secondary: 325 13% 20%;
+    --secondary-foreground: 330 35% 96%;
+    --muted: 325 13% 20%;
+    --muted-foreground: 330 12% 72%;
+    --accent: 268 28% 35%;
+    --accent-foreground: 330 35% 96%;
+    --destructive: 0 42% 42%;
+    --destructive-foreground: 330 35% 96%;
+    --border: 324 14% 24%;
+    --input: 324 14% 24%;
+    --ring: 339 47% 60%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    min-height: 100vh;
+    font-feature-settings: "rlig" 1, "calt" 1;
+    background-image:
+      radial-gradient(circle at top left, rgba(247, 214, 224, 0.78), transparent 26%),
+      radial-gradient(circle at top right, rgba(201, 182, 228, 0.22), transparent 20%),
+      linear-gradient(180deg, #fffdfd 0%, #fff8fb 48%, #fff5f8 100%);
+    background-attachment: fixed;
+  }
+
+  ::selection {
+    background: rgba(199, 108, 138, 0.22);
+  }
+}

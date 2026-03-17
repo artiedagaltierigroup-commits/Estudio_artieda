@@ -1,0 +1,47 @@
+import { Card } from "@/components/ui/card";
+import { getToneStyles, type VisualTone } from "@/lib/presentation";
+import { cn } from "@/lib/utils";
+import type { LucideIcon } from "lucide-react";
+
+interface MetricCardProps {
+  label: string;
+  value: string;
+  subtitle?: string;
+  hint?: string;
+  icon: LucideIcon;
+  tone: VisualTone;
+  className?: string;
+}
+
+export function MetricCard({
+  label,
+  value,
+  subtitle,
+  hint,
+  icon: Icon,
+  tone,
+  className,
+}: MetricCardProps) {
+  const styles = getToneStyles(tone);
+
+  return (
+    <Card className={cn("overflow-hidden", styles.panel, className)}>
+      <div className="flex h-full flex-col gap-4 p-5">
+        <div className="flex items-start justify-between gap-4">
+          <div className="space-y-1">
+            <p className="text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+              {label}
+            </p>
+            <p className="text-2xl font-semibold tracking-[-0.03em] text-foreground">{value}</p>
+          </div>
+          <span className={cn("flex h-11 w-11 items-center justify-center rounded-2xl", styles.iconWrap)}>
+            <Icon className={cn("h-5 w-5", styles.icon)} />
+          </span>
+        </div>
+
+        {subtitle ? <p className="text-sm leading-6 text-muted-foreground">{subtitle}</p> : null}
+        {hint ? <p className={cn("text-xs font-medium", styles.accent)}>{hint}</p> : null}
+      </div>
+    </Card>
+  );
+}
