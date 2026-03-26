@@ -4,25 +4,25 @@
 
 @layer base {
   :root {
-    --background: 330 100% 99%;
-    --foreground: 315 8% 29%;
+    --background: 0 0% 99%;
+    --foreground: 348 15% 22%;
     --card: 0 0% 100%;
-    --card-foreground: 315 8% 29%;
+    --card-foreground: 348 15% 22%;
     --popover: 0 0% 100%;
-    --popover-foreground: 315 8% 29%;
-    --primary: 339 62% 76%;
+    --popover-foreground: 348 15% 22%;
+    --primary: 347 47% 44%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 338 69% 91%;
-    --secondary-foreground: 315 8% 29%;
-    --muted: 330 25% 96%;
-    --muted-foreground: 329 6% 51%;
-    --accent: 268 44% 80%;
-    --accent-foreground: 315 8% 29%;
-    --destructive: 0 59% 64%;
+    --secondary: 350 45% 95%;
+    --secondary-foreground: 348 15% 22%;
+    --muted: 350 18% 96%;
+    --muted-foreground: 345 8% 43%;
+    --accent: 336 66% 68%;
+    --accent-foreground: 348 15% 22%;
+    --destructive: 0 57% 56%;
     --destructive-foreground: 0 0% 100%;
-    --border: 333 30% 88%;
-    --input: 333 30% 88%;
-    --ring: 336 46% 60%;
+    --border: 350 18% 87%;
+    --input: 350 18% 87%;
+    --ring: 347 47% 44%;
     --radius: 1rem;
   }
 
@@ -59,13 +59,12 @@
     min-height: 100vh;
     font-feature-settings: "rlig" 1, "calt" 1;
     background-image:
-      radial-gradient(circle at top left, rgba(247, 214, 224, 0.78), transparent 26%),
-      radial-gradient(circle at top right, rgba(201, 182, 228, 0.22), transparent 20%),
-      linear-gradient(180deg, #fffdfd 0%, #fff8fb 48%, #fff5f8 100%);
+      radial-gradient(circle at top left, rgba(214, 113, 145, 0.12), transparent 24%),
+      linear-gradient(180deg, #fffefe 0%, #fffafc 44%, #fff7f8 100%);
     background-attachment: fixed;
   }
 
   ::selection {
-    background: rgba(199, 108, 138, 0.22);
+    background: rgba(190, 85, 118, 0.2);
   }
 }

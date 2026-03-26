@@ -56,24 +56,9 @@ export default function LoginPage() {
                 Gestion personal, clara y elegante para el trabajo diario.
               </h1>
               <p className="mt-4 max-w-xl text-base leading-7 text-muted-foreground">
-                Base tecnica lista para clientes, casos, cobros, gastos y recordatorios internos sin depender de una
-                infraestructura compleja.
+                Organiza clientes, causas, cobros, gastos y recordatorios en un solo lugar, con acceso reservado para
+                el trabajo interno del estudio.
               </p>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-3">
-              <div className="rounded-[24px] border border-border/70 bg-background/80 p-4">
-                <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Auth</p>
-                <p className="mt-2 text-sm font-medium text-foreground">Supabase con acceso privado</p>
-              </div>
-              <div className="rounded-[24px] border border-border/70 bg-background/80 p-4">
-                <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">DB</p>
-                <p className="mt-2 text-sm font-medium text-foreground">Drizzle sobre Postgres de Supabase</p>
-              </div>
-              <div className="rounded-[24px] border border-border/70 bg-background/80 p-4">
-                <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Shell</p>
-                <p className="mt-2 text-sm font-medium text-foreground">Dashboard listo para crecer por modulos</p>
-              </div>
             </div>
           </section>
 
@@ -85,9 +70,7 @@ export default function LoginPage() {
                 </div>
                 <div className="space-y-1">
                   <CardTitle>Iniciar sesion</CardTitle>
-                  <CardDescription>
-                    Acceso privado para la unica usuaria inicial del sistema.
-                  </CardDescription>
+                  <CardDescription>Acceso privado al sistema interno del estudio.</CardDescription>
                 </div>
               </CardHeader>
               <CardContent>
@@ -127,7 +110,7 @@ export default function LoginPage() {
                       />
                       Recordarme en este dispositivo
                     </label>
-                    <span className="text-xs text-muted-foreground">Recuperacion opcional en fase posterior</span>
+                    <span className="text-xs text-muted-foreground">Uso exclusivo del estudio</span>
                   </div>
 
                   <Button id="btn-login" type="submit" disabled={loading} className="w-full">
@@ -135,7 +118,7 @@ export default function LoginPage() {
                   </Button>
 
                   <p className="text-center text-xs leading-5 text-muted-foreground">
-                    La autenticacion usa Supabase y el acceso publico permanece deshabilitado.
+                    Ingreso seguro para la gestion interna y la consulta diaria.
                   </p>
                 </form>
               </CardContent>

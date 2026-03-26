@@ -19,6 +19,7 @@ describe("presentation helpers", () => {
     expect(getChargeStatusTone("PARTIAL")).toBe("lilac");
     expect(getChargeStatusTone("PAID")).toBe("sage");
     expect(getChargeStatusTone("OVERDUE")).toBe("danger");
+    expect(getChargeStatusTone("CANCELLED")).toBe("slate");
     expect(getChargeStatusTone("WHATEVER")).toBe("amber");
   });
 
@@ -29,7 +30,7 @@ describe("presentation helpers", () => {
   });
 
   it("exposes chip classes for each tone", () => {
-    expect(getToneStyles("rose").chip).toContain("bg-primary/10");
+    expect(getToneStyles("rose").chip).toContain("bg-[#f8e8ee]");
     expect(getToneStyles("danger").dot).toContain("#d96c6c");
   });
 });

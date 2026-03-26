@@ -26,15 +26,15 @@ describe("getRouteMeta", () => {
     });
 
     expect(getRouteMeta("/configuracion")).toEqual({
-      title: "Configuracion",
-      description: "Preferencias base del sistema",
+      title: "Ayuda",
+      description: "Guia operativa del sistema y accesos por modulo",
     });
   });
 
   it("falls back to generic copy for unknown routes", () => {
     expect(getRouteMeta("/algo-que-no-existe")).toEqual({
       title: "Panel",
-      description: "Base operativa del sistema",
+      description: "Vista general del estudio",
     });
   });
 });

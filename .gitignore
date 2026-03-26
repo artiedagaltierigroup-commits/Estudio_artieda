@@ -3,5 +3,7 @@
 .next/
 node_modules/
 out/
+output/
+.codex*.log
 *.tsbuildinfo
 next-env.d.ts

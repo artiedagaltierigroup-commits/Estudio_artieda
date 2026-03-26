@@ -14,6 +14,7 @@ export interface CalendarEvent {
   subtitle?: string;
   amount?: number;
   color: string;
+  href?: string;
 }
 
 const COLOR_MAP: Record<CalendarEventType, string> = {
@@ -59,6 +60,7 @@ export async function getCalendarEvents(from: string, to: string): Promise<Calen
       subtitle: charge.case?.client?.name,
       amount: parseFloat(charge.amountTotal),
       color: COLOR_MAP.charge,
+      href: `/cobros/${charge.id}`,
     });
   }
 
@@ -78,6 +80,7 @@ export async function getCalendarEvents(from: string, to: string): Promise<Calen
       title: reminder.title,
       subtitle: reminder.description ?? undefined,
       color: COLOR_MAP.reminder,
+      href: "/recordatorios",
     });
   }
 
@@ -99,6 +102,7 @@ export async function getCalendarEvents(from: string, to: string): Promise<Calen
       title: expense.description,
       amount: parseFloat(expense.amount),
       color: COLOR_MAP.expense,
+      href: `/gastos/${expense.id}`,
     });
   }
 
@@ -124,6 +128,7 @@ export async function getCalendarEvents(from: string, to: string): Promise<Calen
           title: recurring.description,
           amount: parseFloat(recurring.amount),
           color: COLOR_MAP.recurring,
+          href: `/gastos/recurrentes/${recurring.id}/editar`,
         });
       }
 

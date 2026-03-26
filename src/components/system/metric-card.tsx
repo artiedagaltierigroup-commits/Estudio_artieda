@@ -1,4 +1,5 @@
 import { Card } from "@/components/ui/card";
+import { InfoPopover } from "@/components/system/info-popover";
 import { getToneStyles, type VisualTone } from "@/lib/presentation";
 import { cn } from "@/lib/utils";
 import type { LucideIcon } from "lucide-react";
@@ -29,9 +30,12 @@ export function MetricCard({
       <div className="flex h-full flex-col gap-4 p-5">
         <div className="flex items-start justify-between gap-4">
           <div className="space-y-1">
-            <p className="text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-              {label}
-            </p>
+            <div className="flex items-center gap-1">
+              <p className="text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                {label}
+              </p>
+              {subtitle ? <InfoPopover content={subtitle} /> : null}
+            </div>
             <p className="text-2xl font-semibold tracking-[-0.03em] text-foreground">{value}</p>
           </div>
           <span className={cn("flex h-11 w-11 items-center justify-center rounded-2xl", styles.iconWrap)}>
@@ -39,7 +43,6 @@ export function MetricCard({
           </span>
         </div>
 
-        {subtitle ? <p className="text-sm leading-6 text-muted-foreground">{subtitle}</p> : null}
         {hint ? <p className={cn("text-xs font-medium", styles.accent)}>{hint}</p> : null}
       </div>
     </Card>

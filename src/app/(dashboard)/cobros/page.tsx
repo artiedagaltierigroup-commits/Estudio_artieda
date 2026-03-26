@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/system/page-header";
 import { SectionCard } from "@/components/system/section-card";
 import { StatusChip } from "@/components/system/status-chip";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { getChargeStatusTone } from "@/lib/presentation";
 import { formatCurrency, formatDate, getChargeStatusLabel } from "@/lib/utils";
 import {
@@ -14,22 +15,39 @@ import {
   CreditCard,
   HandCoins,
   Plus,
+  Search,
 } from "lucide-react";
 import Link from "next/link";
 
-export default async function CobrosPage() {
-  const charges = await getCharges();
+const selectClassName =
+  "flex h-11 w-full rounded-2xl border border-input bg-background px-4 py-2 text-sm text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+
+interface CobrosPageProps {
+  searchParams?: Promise<{
+    q?: string;
+    status?: string;
+  }>;
+}
+
+export default async function CobrosPage({ searchParams }: CobrosPageProps) {
+  const params = (await searchParams) ?? {};
+  const filters = {
+    query: params.q?.trim() ?? "",
+    status: params.status?.trim() ?? "",
+  };
+
+  const charges = await getCharges(filters);
   const totals = charges.reduce(
     (acc, charge) => {
-      const total = Number(charge.amountTotal);
-      const paid = Number(charge.amountPaid);
-      const balance = total - paid;
+      if (charge.derivedStatus === "CANCELLED") {
+        acc.CANCELLED += 1;
+        return acc;
+      }
 
-      acc.total += total;
-      acc.paid += paid;
-      acc.balance += balance;
+      acc.total += Number(charge.amountTotal);
+      acc.paid += Number(charge.amountPaid);
+      acc.balance += charge.balance;
       acc[charge.derivedStatus] += 1;
-
       return acc;
     },
     {
@@ -40,6 +58,7 @@ export default async function CobrosPage() {
       PARTIAL: 0,
       PAID: 0,
       OVERDUE: 0,
+      CANCELLED: 0,
     }
   );
 
@@ -48,9 +67,9 @@ export default async function CobrosPage() {
       <PageHeader
         eyebrow="Control financiero"
         title="Cobros"
-        description="Seccion central para leer pactado, cobrado y saldo vivo de cada compromiso sin depender aun de filtros avanzados."
+        description="Bandeja de compromisos de cobro con lectura de saldo, vencimiento, pagos aplicados y acceso directo a operar cada uno."
         stats={[
-          { label: "Registros", value: `${charges.length}` },
+          { label: "Visibles", value: `${charges.length}` },
           { label: "Saldo vivo", value: formatCurrency(totals.balance) },
           { label: "Parciales", value: `${totals.PARTIAL}` },
           { label: "Vencidos", value: `${totals.OVERDUE}` },
@@ -65,61 +84,92 @@ export default async function CobrosPage() {
         }
       />
 
-      {charges.length > 0 ? (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <MetricCard
-            label="Cobrado"
-            value={formatCurrency(totals.paid)}
-            subtitle="Pagos ya registrados sobre el total pactado."
-            icon={HandCoins}
-            tone="sage"
-          />
-          <MetricCard
-            label="Pendiente"
-            value={formatCurrency(totals.balance)}
-            subtitle="Saldo que todavia falta recuperar."
-            icon={Clock3}
-            tone="amber"
-          />
-          <MetricCard
-            label="Vencidos"
-            value={`${totals.OVERDUE} cobro(s)`}
-            subtitle="Compromisos que ya requieren seguimiento inmediato."
-            icon={AlarmClockCheck}
-            tone="danger"
-          />
-          <MetricCard
-            label="Programados"
-            value={formatCurrency(totals.total)}
-            subtitle="Monto comprometido entre todos los cobros cargados."
-            icon={Coins}
-            tone="lilac"
-          />
-        </div>
-      ) : null}
-
-      {charges.length === 0 ? (
-        <EmptyState
-          icon={CreditCard}
-          title="Todavia no hay cobros cargados"
-          description="Cuando registres el primer compromiso de cobro, esta pantalla va a mostrar saldo, estados y seguimiento financiero."
-          action={
-            <Button asChild>
-              <Link href="/cobros/nuevo">
-                <Plus className="h-4 w-4" />
-                Crear primer cobro
-              </Link>
-            </Button>
-          }
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <MetricCard
+          label="Cobrado"
+          value={formatCurrency(totals.paid)}
+          subtitle="Pagos ya registrados sobre el total pactado."
+          icon={HandCoins}
+          tone="sage"
         />
-      ) : (
-        <SectionCard
-          eyebrow="Listado base"
-          title="Compromisos de cobro"
-          description="El estado sigue derivandose desde saldo y vencimiento. Esta vista solo lo hace visible de forma mas clara."
-          contentClassName="p-0"
-        >
-          <div className="overflow-x-auto">
+        <MetricCard
+          label="Pendiente"
+          value={formatCurrency(totals.balance)}
+          subtitle="Saldo que todavia falta recuperar."
+          icon={Clock3}
+          tone="amber"
+        />
+        <MetricCard
+          label="Vencidos"
+          value={`${totals.OVERDUE} cobro(s)`}
+          subtitle="Compromisos que ya requieren seguimiento inmediato."
+          icon={AlarmClockCheck}
+          tone="danger"
+        />
+        <MetricCard
+          label="Programados"
+          value={formatCurrency(totals.total)}
+          subtitle="Monto comprometido entre todos los cobros visibles."
+          icon={Coins}
+          tone="lilac"
+        />
+      </div>
+
+      <SectionCard
+        eyebrow="Vista operativa"
+        title="Compromisos de cobro"
+        description="Busqueda por cliente, caso o descripcion, con filtro por estado derivado."
+      >
+        <form className="grid gap-3 border-b border-border/80 pb-5 lg:grid-cols-[minmax(0,1.2fr)_180px_auto]">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              name="q"
+              defaultValue={filters.query}
+              placeholder="Buscar por descripcion, cliente o caso"
+              className="pl-10"
+            />
+          </div>
+
+          <select name="status" defaultValue={filters.status || ""} className={selectClassName}>
+            <option value="">Todos los estados</option>
+            <option value="PENDING">Pendientes</option>
+            <option value="PARTIAL">Parciales</option>
+            <option value="OVERDUE">Vencidos</option>
+            <option value="PAID">Pagados</option>
+            <option value="CANCELLED">Cancelados</option>
+          </select>
+
+          <div className="flex gap-2">
+            <Button type="submit" variant="outline">
+              Filtrar
+            </Button>
+            {filters.query || filters.status ? (
+              <Button asChild variant="ghost">
+                <Link href="/cobros">Limpiar</Link>
+              </Button>
+            ) : null}
+          </div>
+        </form>
+
+        {charges.length === 0 ? (
+          <div className="pt-6">
+            <EmptyState
+              icon={CreditCard}
+              title="No hay cobros para esta vista"
+              description="Crea un cobro nuevo o limpia los filtros para volver a ver el panel completo."
+              action={
+                <Button asChild>
+                  <Link href="/cobros/nuevo">
+                    <Plus className="h-4 w-4" />
+                    Crear cobro
+                  </Link>
+                </Button>
+              }
+            />
+          </div>
+        ) : (
+          <div className="overflow-x-auto pt-6">
             <table className="min-w-full text-sm">
               <thead>
                 <tr className="border-b border-border/80 bg-muted/35">
@@ -144,50 +194,54 @@ export default async function CobrosPage() {
                   <th className="px-6 py-4 text-left text-[0.72rem] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                     Estado
                   </th>
+                  <th className="px-6 py-4 text-right text-[0.72rem] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                    Accion
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/80">
-                {charges.map((charge) => {
-                  const balance = Number(charge.amountTotal) - Number(charge.amountPaid);
-
-                  return (
-                    <tr key={charge.id} className="transition-colors hover:bg-muted/25">
-                      <td className="px-6 py-4 align-top">
-                        <div className="space-y-1">
-                          <p className="font-semibold text-foreground">{charge.description}</p>
-                          <p className="text-xs text-muted-foreground">
-                            ID interno listo para detalle y edicion.
-                          </p>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 align-top text-xs text-muted-foreground">
-                        <p className="font-medium text-foreground">{charge.case?.client?.name ?? "Sin cliente"}</p>
-                        <p className="mt-1">{charge.case?.title ?? "Sin caso asociado"}</p>
-                      </td>
-                      <td className="px-6 py-4 text-right font-medium text-foreground">
-                        {formatCurrency(charge.amountTotal)}
-                      </td>
-                      <td className="px-6 py-4 text-right font-medium text-[#48745f]">
-                        {formatCurrency(charge.amountPaid)}
-                      </td>
-                      <td className="px-6 py-4 text-right font-semibold text-foreground">
-                        {formatCurrency(balance)}
-                      </td>
-                      <td className="px-6 py-4 text-muted-foreground">{formatDate(charge.dueDate)}</td>
-                      <td className="px-6 py-4">
-                        <StatusChip
-                          label={getChargeStatusLabel(charge.derivedStatus)}
-                          tone={getChargeStatusTone(charge.derivedStatus)}
-                        />
-                      </td>
-                    </tr>
-                  );
-                })}
+                {charges.map((charge) => (
+                  <tr key={charge.id} className="transition-colors hover:bg-muted/25">
+                    <td className="px-6 py-4 align-top">
+                      <div className="space-y-1">
+                        <p className="font-semibold text-foreground">{charge.description}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {charge.payments.length} pago(s) · {charge.followUpDate ? `seguimiento ${formatDate(charge.followUpDate)}` : "sin seguimiento"}
+                        </p>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 align-top text-xs text-muted-foreground">
+                      <p className="font-medium text-foreground">{charge.case?.client?.name ?? "Sin cliente"}</p>
+                      <p className="mt-1">{charge.case?.title ?? "Sin caso asociado"}</p>
+                    </td>
+                    <td className="px-6 py-4 text-right font-medium text-foreground">
+                      {formatCurrency(charge.amountTotal)}
+                    </td>
+                    <td className="px-6 py-4 text-right font-medium text-[#48745f]">
+                      {formatCurrency(charge.amountPaid)}
+                    </td>
+                    <td className="px-6 py-4 text-right font-semibold text-foreground">
+                      {formatCurrency(charge.balance)}
+                    </td>
+                    <td className="px-6 py-4 text-muted-foreground">{formatDate(charge.dueDate)}</td>
+                    <td className="px-6 py-4">
+                      <StatusChip
+                        label={getChargeStatusLabel(charge.derivedStatus)}
+                        tone={getChargeStatusTone(charge.derivedStatus)}
+                      />
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <Button asChild variant="ghost" size="sm">
+                        <Link href={`/cobros/${charge.id}`}>Operar</Link>
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
-        </SectionCard>
-      )}
+        )}
+      </SectionCard>
     </div>
   );
 }

@@ -3,11 +3,11 @@ import {
   Bell,
   Briefcase,
   Calendar,
+  CircleHelp,
   CreditCard,
   History,
   LayoutDashboard,
   Receipt,
-  Settings,
   Users,
   type LucideIcon,
 } from "lucide-react";
@@ -35,7 +35,7 @@ export const dashboardNavigation: DashboardNavItem[] = [
   {
     href: "/casos",
     label: "Casos",
-    description: "Seguimiento general de asuntos activos",
+    description: "Expedientes abiertos, cerrados y en curso",
     icon: Briefcase,
   },
   {
@@ -59,7 +59,7 @@ export const dashboardNavigation: DashboardNavItem[] = [
   {
     href: "/recordatorios",
     label: "Recordatorios",
-    description: "Panel interno de alertas y seguimiento",
+    description: "Alertas internas y tareas pendientes",
     icon: Bell,
   },
   {
@@ -71,14 +71,14 @@ export const dashboardNavigation: DashboardNavItem[] = [
   {
     href: "/historial",
     label: "Historial",
-    description: "Auditoria basica de cambios del sistema",
+    description: "Cambios recientes sobre la informacion",
     icon: History,
   },
   {
     href: "/configuracion",
-    label: "Configuracion",
-    description: "Preferencias base del sistema",
-    icon: Settings,
+    label: "Ayuda",
+    description: "Guia operativa del sistema y accesos por modulo",
+    icon: CircleHelp,
   },
 ];
 
@@ -90,7 +90,7 @@ export function getRouteMeta(pathname: string) {
   if (!matchedRoute) {
     return {
       title: "Panel",
-      description: "Base operativa del sistema",
+      description: "Vista general del estudio",
     };
   }
 

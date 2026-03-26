@@ -4,24 +4,17 @@ import { PageHeader } from "@/components/system/page-header";
 import { SectionCard } from "@/components/system/section-card";
 import { StatusChip } from "@/components/system/status-chip";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+import { RecurringExpenseForm } from "@/components/expenses/recurring-expense-form";
 import { formatCurrency, getExpenseTypeLabel, getFrequencyLabel } from "@/lib/utils";
-import { ArrowLeft, RefreshCcw, Save } from "lucide-react";
+import { ArrowLeft, RefreshCcw } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
 async function handleCreate(formData: FormData) {
   "use server";
-
-  formData.set("active", "true");
-  await createRecurringExpense(formData);
-  redirect("/gastos/recurrentes");
+  const result = await createRecurringExpense(formData);
+  if (result.success) redirect("/gastos/recurrentes");
 }
-
-const selectClassName =
-  "flex h-11 w-full rounded-2xl border border-input bg-background px-4 py-2 text-sm text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
 export default async function GastosRecurrentesPage() {
   const list = await getRecurringExpenses();
@@ -48,76 +41,7 @@ export default async function GastosRecurrentesPage() {
         }
       />
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_320px]">
-        <SectionCard
-          eyebrow="Nueva plantilla"
-          title="Agregar gasto recurrente"
-          description="Queda pensado para proyectar el mes sin duplicar carga manual."
-        >
-          <form action={handleCreate} className="space-y-4">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2 sm:col-span-2">
-                <Label htmlFor="description">Descripcion</Label>
-                <Input id="description" name="description" required placeholder="Ejemplo: alquiler, internet o software" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="amount">Monto</Label>
-                <Input id="amount" name="amount" type="number" step="1" required placeholder="0" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="frequency">Frecuencia</Label>
-                <select id="frequency" name="frequency" className={selectClassName}>
-                  <option value="monthly">Mensual</option>
-                  <option value="quarterly">Trimestral</option>
-                  <option value="yearly">Anual</option>
-                </select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="type">Tipo</Label>
-                <select id="type" name="type" className={selectClassName}>
-                  <option value="OPERATIVE">Operativo</option>
-                  <option value="TAX">Impuesto</option>
-                  <option value="SERVICE">Servicio</option>
-                  <option value="OTHER">Otro</option>
-                </select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="startDate">Fecha de inicio</Label>
-                <Input id="startDate" name="startDate" type="date" required />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="endDate">Fecha fin</Label>
-                <Input id="endDate" name="endDate" type="date" />
-              </div>
-              <div className="space-y-2 sm:col-span-2">
-                <Label htmlFor="notes">Notas</Label>
-                <Textarea id="notes" name="notes" className="min-h-[110px]" placeholder="Aclaraciones utiles para la proyeccion." />
-              </div>
-            </div>
-            <div className="flex justify-end">
-              <Button type="submit">
-                <Save className="h-4 w-4" />
-                Guardar plantilla
-              </Button>
-            </div>
-          </form>
-        </SectionCard>
-
-        <SectionCard
-          eyebrow="Criterio"
-          title="Uso recomendado"
-          description="Este modulo esta pensado para mirar proyeccion, no caja real."
-        >
-          <div className="space-y-3 text-sm leading-6 text-muted-foreground">
-            <div className="rounded-[24px] border border-border/70 bg-white/80 p-4">
-              Lo recurrente complementa los gastos reales del modulo principal.
-            </div>
-            <div className="rounded-[24px] border border-border/70 bg-white/80 p-4">
-              Si el gasto deja de existir, se desactiva la plantilla y listo.
-            </div>
-          </div>
-        </SectionCard>
-      </div>
+      <RecurringExpenseForm action={handleCreate} cancelHref="/gastos" submitLabel="Guardar gasto recurrente" />
 
       {list.length === 0 ? (
         <EmptyState
@@ -150,13 +74,21 @@ export default async function GastosRecurrentesPage() {
                     {getFrequencyLabel(item.frequency)}
                   </span>
                   <span className="rounded-full border border-border/80 bg-background px-3 py-1">
+                    {item.category ?? "Sin categoria"}
+                  </span>
+                  <span className="rounded-full border border-border/80 bg-background px-3 py-1">
                     Desde {item.startDate}
                   </span>
                 </div>
               </div>
-              <div className="text-right">
-                <p className="text-lg font-semibold text-foreground">{formatCurrency(item.amount)}</p>
-                {item.endDate ? <p className="text-xs text-muted-foreground">Hasta {item.endDate}</p> : null}
+              <div className="flex items-center gap-4">
+                <div className="text-right">
+                  <p className="text-lg font-semibold text-foreground">{formatCurrency(item.amount)}</p>
+                  {item.endDate ? <p className="text-xs text-muted-foreground">Hasta {item.endDate}</p> : null}
+                </div>
+                <Button asChild variant="ghost" size="sm">
+                  <Link href={`/gastos/recurrentes/${item.id}/editar`}>Editar</Link>
+                </Button>
               </div>
             </div>
           ))}

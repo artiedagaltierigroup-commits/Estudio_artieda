@@ -1,3 +1,4 @@
+import { InfoPopover } from "@/components/system/info-popover";
 import { cn } from "@/lib/utils";
 import type { ReactNode } from "react";
 
@@ -9,7 +10,7 @@ interface PageHeaderStat {
 interface PageHeaderProps {
   eyebrow?: string;
   title: string;
-  description: string;
+  description?: string;
   stats?: PageHeaderStat[];
   actions?: ReactNode;
   className?: string;
@@ -26,7 +27,7 @@ export function PageHeader({
   return (
     <section
       className={cn(
-        "overflow-hidden rounded-[32px] border border-border/80 bg-[radial-gradient(circle_at_top_left,rgba(232,154,180,0.22),transparent_36%),radial-gradient(circle_at_top_right,rgba(201,182,228,0.18),transparent_28%),linear-gradient(180deg,rgba(255,255,255,0.98),rgba(255,248,251,0.94))] p-6 shadow-[0_28px_80px_-56px_rgba(135,92,111,0.5)]",
+        "overflow-hidden rounded-[32px] border border-border/80 bg-white p-6 shadow-[0_24px_60px_-52px_rgba(122,56,79,0.18)]",
         className
       )}
     >
@@ -38,12 +39,12 @@ export function PageHeader({
             </span>
           ) : null}
           <div className="space-y-2">
-            <h1 className="text-3xl font-semibold tracking-[-0.04em] text-foreground sm:text-4xl">
-              {title}
-            </h1>
-            <p className="max-w-3xl text-sm leading-6 text-muted-foreground sm:text-base">
-              {description}
-            </p>
+            <div className="flex items-center gap-2">
+              <h1 className="text-3xl font-semibold tracking-[-0.04em] text-foreground sm:text-4xl">
+                {title}
+              </h1>
+              {description ? <InfoPopover content={description} className="mt-1" /> : null}
+            </div>
           </div>
         </div>
         {actions ? <div className="flex flex-wrap items-center gap-3">{actions}</div> : null}
@@ -54,7 +55,7 @@ export function PageHeader({
           {stats.map((stat) => (
             <div
               key={stat.label}
-              className="rounded-[24px] border border-white/80 bg-white/80 px-4 py-3 shadow-[0_16px_42px_-34px_rgba(135,92,111,0.45)]"
+              className="rounded-[24px] border border-border/70 bg-white/90 px-4 py-3 shadow-[0_16px_42px_-36px_rgba(122,56,79,0.22)]"
             >
               <dt className="text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                 {stat.label}

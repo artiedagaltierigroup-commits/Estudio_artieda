@@ -1,102 +1,167 @@
-import { getCharges } from "@/actions/charges";
-import { getMonthlyIncomeChart } from "@/actions/dashboard";
-import { getExpenses } from "@/actions/expenses";
-import { EstadisticasCharts } from "@/components/estadisticas/estadisticas-charts";
+import { getStatisticsFilterOptions, getStatisticsSnapshot } from "@/actions/dashboard";
+import { EstadisticasFilters } from "@/components/estadisticas/estadisticas-filters";
+import { EstadisticasCharts, StatisticsTrendChartCard } from "@/components/estadisticas/estadisticas-charts";
+import { InfoPopover } from "@/components/system/info-popover";
 import { MetricCard } from "@/components/system/metric-card";
-import { PageHeader } from "@/components/system/page-header";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, formatDate } from "@/lib/utils";
+import { endOfMonth, format, startOfMonth, subMonths } from "date-fns";
 import { BarChart3, CircleDollarSign, CreditCard, ReceiptText } from "lucide-react";
 
-export default async function EstadisticasPage() {
-  const [chartData, expenses, charges] = await Promise.all([
-    getMonthlyIncomeChart(12),
-    getExpenses(),
-    getCharges(),
+interface EstadisticasPageProps {
+  searchParams?: Promise<{
+    from?: string;
+    to?: string;
+    clientId?: string;
+    caseId?: string;
+  }>;
+}
+
+function buildComparisonHint(metric: {
+  amount: number;
+  percentage: number;
+  direction: "up" | "down" | "flat";
+}) {
+  if (metric.direction === "flat") return "Sin cambio frente al periodo anterior";
+  const sign = metric.direction === "up" ? "+" : "-";
+  return `${sign}${Math.abs(metric.percentage)}% vs periodo anterior`;
+}
+
+function buildPresetHref(from: string, to: string, filters: { clientId: string; caseId: string }) {
+  const params = new URLSearchParams({ from, to });
+  if (filters.clientId) params.set("clientId", filters.clientId);
+  if (filters.caseId) params.set("caseId", filters.caseId);
+  return `/estadisticas?${params.toString()}`;
+}
+
+export default async function EstadisticasPage({ searchParams }: EstadisticasPageProps) {
+  const now = new Date();
+  const params = (await searchParams) ?? {};
+  const from = params.from?.trim() || format(startOfMonth(now), "yyyy-MM-dd");
+  const to = params.to?.trim() || format(endOfMonth(now), "yyyy-MM-dd");
+  const filters = {
+    from,
+    to,
+    clientId: params.clientId?.trim() || "",
+    caseId: params.caseId?.trim() || "",
+  };
+
+  const [analytics, options] = await Promise.all([
+    getStatisticsSnapshot({
+      from: filters.from,
+      to: filters.to,
+      clientId: filters.clientId || undefined,
+      caseId: filters.caseId || undefined,
+    }),
+    getStatisticsFilterOptions(),
   ]);
 
-  const expensesByType = [
-    { name: "Operativo", value: 0 },
-    { name: "Impuesto", value: 0 },
-    { name: "Servicio", value: 0 },
-    { name: "Otro", value: 0 },
+  const currentMonthFrom = format(startOfMonth(now), "yyyy-MM-dd");
+  const currentMonthTo = format(endOfMonth(now), "yyyy-MM-dd");
+  const previousMonthDate = subMonths(now, 1);
+  const previousMonthFrom = format(startOfMonth(previousMonthDate), "yyyy-MM-dd");
+  const previousMonthTo = format(endOfMonth(previousMonthDate), "yyyy-MM-dd");
+  const lastThreeMonthsFrom = format(startOfMonth(subMonths(now, 2)), "yyyy-MM-dd");
+  const lastThreeMonthsTo = currentMonthTo;
+
+  const presets = [
+    {
+      label: "Este mes",
+      href: buildPresetHref(currentMonthFrom, currentMonthTo, filters),
+      active: filters.from === currentMonthFrom && filters.to === currentMonthTo,
+    },
+    {
+      label: "Mes anterior",
+      href: buildPresetHref(previousMonthFrom, previousMonthTo, filters),
+      active: filters.from === previousMonthFrom && filters.to === previousMonthTo,
+    },
+    {
+      label: "Ultimos 3 meses",
+      href: buildPresetHref(lastThreeMonthsFrom, lastThreeMonthsTo, filters),
+      active: filters.from === lastThreeMonthsFrom && filters.to === lastThreeMonthsTo,
+    },
   ];
-
-  for (const expense of expenses) {
-    const amount = parseFloat(expense.amount);
-    if (expense.type === "OPERATIVE") expensesByType[0].value += amount;
-    else if (expense.type === "TAX") expensesByType[1].value += amount;
-    else if (expense.type === "SERVICE") expensesByType[2].value += amount;
-    else expensesByType[3].value += amount;
-  }
-
-  const chargesByStatus = [
-    { name: "Pendiente", value: 0, color: "#D4A15B" },
-    { name: "Parcial", value: 0, color: "#C9B6E4" },
-    { name: "Pagado", value: 0, color: "#7BBE9E" },
-    { name: "Vencido", value: 0, color: "#D96C6C" },
-  ];
-
-  for (const charge of charges) {
-    if (charge.derivedStatus === "PENDING") chargesByStatus[0].value += 1;
-    else if (charge.derivedStatus === "PARTIAL") chargesByStatus[1].value += 1;
-    else if (charge.derivedStatus === "PAID") chargesByStatus[2].value += 1;
-    else if (charge.derivedStatus === "OVERDUE") chargesByStatus[3].value += 1;
-  }
-
-  const totalIncome = chartData.reduce((sum, item) => sum + item.total, 0);
-  const totalExpenses = expenses.reduce((sum, item) => sum + Number(item.amount), 0);
-  const pendingCharges = charges.filter((item) => item.derivedStatus === "PENDING").length;
-  const overdueCharges = charges.filter((item) => item.derivedStatus === "OVERDUE").length;
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        eyebrow="Analitica base"
-        title="Estadisticas"
-        description="Lectura comparativa de ingresos, gastos y distribucion de estados para empezar a detectar patrones del estudio."
-        stats={[
-          { label: "Ventana", value: "12 meses" },
-          { label: "Cobros analizados", value: `${charges.length}` },
-          { label: "Gastos cargados", value: `${expenses.length}` },
-          { label: "Vencidos", value: `${overdueCharges}` },
-        ]}
+      <section className="overflow-hidden rounded-[28px] border border-border/80 bg-white p-4 shadow-[0_24px_60px_-52px_rgba(122,56,79,0.18)]">
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_640px] xl:items-start">
+          <div className="space-y-3 pr-4">
+            <span className="inline-flex rounded-full border border-primary/20 bg-white/80 px-3 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-primary/85">
+              Lectura del estudio
+            </span>
+            <div className="flex items-center gap-2">
+              <h1 className="text-3xl font-semibold tracking-[-0.04em] text-foreground sm:text-4xl">
+                Estadisticas
+              </h1>
+              <InfoPopover
+                content="Vista del periodo para entender cuanto entro, cuanto falta, cuanto se gasto y como se compara contra el periodo anterior equivalente."
+                className="mt-1"
+              />
+            </div>
+            <p className="text-sm text-muted-foreground">
+              {formatDate(filters.from)} al {formatDate(filters.to)}
+              <span className="mx-2 text-border">•</span>
+              comparado con {formatDate(analytics.ranges.previous.from)} al {formatDate(analytics.ranges.previous.to)}
+            </p>
+          </div>
+          <EstadisticasFilters filters={filters} options={options} presets={presets} compact />
+        </div>
+      </section>
+
+      <StatisticsTrendChartCard
+        eyebrow="Ganancias"
+        title="Ganancias brutas del periodo"
+        description="Curva de cobros reales segun el rango activo del filtro, sin descontar gastos."
+        data={analytics.trendSeries}
+        series={[{ dataKey: "grossIncome", label: "Ganancias brutas", stroke: "#20B7A5", fill: "#20B7A5" }]}
+        emptyMessage="Todavia no hay cobros suficientes dentro del periodo para dibujar esta curva."
+        className="bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(32,183,165,0.10))]"
       />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard
-          label="Ingresos 12 meses"
-          value={formatCurrency(totalIncome)}
-          subtitle="Suma de pagos registrados en la ventana analizada."
+          label="Cobrado en el periodo"
+          value={formatCurrency(analytics.metrics.collectedIncome.current)}
+          subtitle="Pagos registrados dentro del periodo seleccionado."
+          hint={buildComparisonHint(analytics.metrics.collectedIncome)}
           icon={CircleDollarSign}
           tone="rose"
         />
         <MetricCard
-          label="Gastos acumulados"
-          value={formatCurrency(totalExpenses)}
-          subtitle="Total de egresos cargados dentro del sistema."
-          icon={ReceiptText}
-          tone="danger"
-        />
-        <MetricCard
-          label="Pendientes"
-          value={`${pendingCharges} cobro(s)`}
-          subtitle="Compromisos aun abiertos y no vencidos."
+          label="Pendiente del periodo"
+          value={formatCurrency(analytics.metrics.pendingIncome.current)}
+          subtitle="Saldo todavia abierto de cobros vinculados al periodo."
+          hint={buildComparisonHint(analytics.metrics.pendingIncome)}
           icon={CreditCard}
           tone="amber"
         />
         <MetricCard
-          label="Resultado simple"
-          value={formatCurrency(totalIncome - totalExpenses)}
-          subtitle="Ingreso acumulado menos gastos cargados."
+          label="Gastos del periodo"
+          value={formatCurrency(analytics.metrics.periodExpenses.current)}
+          subtitle="Egresos cargados dentro del periodo actual."
+          hint={buildComparisonHint(analytics.metrics.periodExpenses)}
+          icon={ReceiptText}
+          tone="danger"
+        />
+        <MetricCard
+          label="Resultado neto"
+          value={formatCurrency(analytics.metrics.netResult.current)}
+          subtitle="Cobrado menos gastos del periodo."
+          hint={buildComparisonHint(analytics.metrics.netResult)}
           icon={BarChart3}
-          tone={totalIncome - totalExpenses >= 0 ? "sage" : "danger"}
+          tone={analytics.metrics.netResult.current >= 0 ? "sage" : "danger"}
         />
       </div>
 
       <EstadisticasCharts
-        chartData={chartData}
-        expensesByType={expensesByType}
-        chargesByStatus={chargesByStatus}
+        comparisonBars={analytics.comparisonBars}
+        trendSeries={analytics.trendSeries}
+        movementSeries={analytics.movementSeries}
+        expensesByCategory={analytics.expensesByCategory}
+        topClients={analytics.topClients}
+        topCases={analytics.topCases}
+        currentRangeLabel={`${formatDate(analytics.ranges.current.from)} al ${formatDate(analytics.ranges.current.to)}`}
+        previousRangeLabel={`${formatDate(analytics.ranges.previous.from)} al ${formatDate(analytics.ranges.previous.to)}`}
       />
     </div>
   );

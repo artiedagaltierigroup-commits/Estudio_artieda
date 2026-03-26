@@ -44,6 +44,10 @@ export function summarizeCaseCharges(items: CaseChargeSummaryInput[]) {
       const status = deriveChargeStatus(String(item.amountTotal), paid.toFixed(2), item.dueDate, item.cancelledAt);
 
       acc.total += 1;
+      if (status === "CANCELLED") {
+        return acc;
+      }
+
       acc.expected += total;
       acc.collected += paid;
       acc.balance += balance;

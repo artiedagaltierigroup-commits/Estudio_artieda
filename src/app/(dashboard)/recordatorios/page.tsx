@@ -1,5 +1,13 @@
-import { createReminder, getReminders } from "@/actions/reminders";
+import {
+  completeReminder,
+  createReminder,
+  deleteReminder,
+  getReminderReferences,
+  getReminders,
+  reopenReminder,
+} from "@/actions/reminders";
 import { EmptyState } from "@/components/system/empty-state";
+import { MetricCard } from "@/components/system/metric-card";
 import { PageHeader } from "@/components/system/page-header";
 import { SectionCard } from "@/components/system/section-card";
 import { StatusChip } from "@/components/system/status-chip";
@@ -8,8 +16,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { getReminderPriorityTone } from "@/lib/module-presenters";
+import { sortRemindersForPanel, summarizeReminderPanel } from "@/lib/operations-insights";
 import { formatDateTime, getPriorityLabel } from "@/lib/utils";
-import { Bell, CheckCircle2, Plus } from "lucide-react";
+import { Bell, CalendarCheck2, CheckCircle2, Clock3, Plus, RotateCcw, Trash2 } from "lucide-react";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 
 async function handleCreate(formData: FormData) {
@@ -18,33 +28,94 @@ async function handleCreate(formData: FormData) {
   redirect("/recordatorios");
 }
 
+async function handleComplete(formData: FormData) {
+  "use server";
+  const reminderId = String(formData.get("reminderId") ?? "");
+  if (reminderId) {
+    await completeReminder(reminderId);
+  }
+  redirect("/recordatorios");
+}
+
+async function handleReopen(formData: FormData) {
+  "use server";
+  const reminderId = String(formData.get("reminderId") ?? "");
+  if (reminderId) {
+    await reopenReminder(reminderId);
+  }
+  redirect("/recordatorios");
+}
+
+async function handleDelete(formData: FormData) {
+  "use server";
+  const reminderId = String(formData.get("reminderId") ?? "");
+  if (reminderId) {
+    await deleteReminder(reminderId);
+  }
+  redirect("/recordatorios");
+}
+
 const selectClassName =
   "flex h-11 w-full rounded-2xl border border-input bg-background px-4 py-2 text-sm text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
 export default async function RecordatoriosPage() {
-  const list = await getReminders();
-  const pending = list.filter((item) => !item.completed);
-  const done = list.filter((item) => item.completed);
-  const highPriority = pending.filter((item) => item.priority === "HIGH").length;
+  const [list, references] = await Promise.all([getReminders(), getReminderReferences()]);
+  const summary = summarizeReminderPanel(list);
+  const pending = sortRemindersForPanel(list.filter((item) => !item.completed));
+  const done = [...list.filter((item) => item.completed)].sort(
+    (left, right) => new Date(right.completedAt ?? right.updatedAt).getTime() - new Date(left.completedAt ?? left.updatedAt).getTime()
+  );
 
   return (
     <div className="space-y-6">
       <PageHeader
         eyebrow="Seguimiento"
         title="Recordatorios"
-        description="Panel interno de tareas y alertas. La idea aca es que nada importante se pierda entre casos, clientes y vencimientos."
+        description="Panel operativo para alertas manuales y tareas pendientes ligadas a clientes, casos o trabajo general."
         stats={[
-          { label: "Pendientes", value: `${pending.length}` },
-          { label: "Resueltos", value: `${done.length}` },
-          { label: "Alta prioridad", value: `${highPriority}` },
+          { label: "Pendientes", value: `${summary.pending}` },
+          { label: "Vencidos", value: `${summary.overdue}` },
+          { label: "Hoy", value: `${summary.dueToday}` },
+          { label: "Resueltos", value: `${summary.completed}` },
         ]}
       />
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_320px]">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <MetricCard
+          label="Alta prioridad"
+          value={`${summary.highPriority}`}
+          subtitle="Alertas que conviene resolver antes de cerrar el dia."
+          icon={Bell}
+          tone="danger"
+        />
+        <MetricCard
+          label="Pendientes"
+          value={`${summary.pending}`}
+          subtitle="Recordatorios aun abiertos dentro del panel."
+          icon={Clock3}
+          tone="amber"
+        />
+        <MetricCard
+          label="Vencidos"
+          value={`${summary.overdue}`}
+          subtitle="Alertas cuya fecha ya quedo atras."
+          icon={CalendarCheck2}
+          tone="danger"
+        />
+        <MetricCard
+          label="Proximos 7 dias"
+          value={`${summary.upcoming}`}
+          subtitle="Carga que ya esta entrando en la semana."
+          icon={CheckCircle2}
+          tone="sage"
+        />
+      </div>
+
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.25fr)_340px]">
         <SectionCard
           eyebrow="Alta rapida"
           title="Nuevo recordatorio"
-          description="Carga minima para registrar una alerta interna y seguir con la operacion."
+          description="Puede ser general, ligado a un cliente o asociado a un caso puntual."
         >
           <form action={handleCreate} className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-2">
@@ -64,9 +135,36 @@ export default async function RecordatoriosPage() {
                   <option value="HIGH">Alta</option>
                 </select>
               </div>
+              <div className="space-y-2">
+                <Label htmlFor="clientId">Cliente opcional</Label>
+                <select id="clientId" name="clientId" className={selectClassName} defaultValue="">
+                  <option value="">General</option>
+                  {references.clients.map((client) => (
+                    <option key={client.id} value={client.id}>
+                      {client.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="caseId">Caso opcional</Label>
+                <select id="caseId" name="caseId" className={selectClassName} defaultValue="">
+                  <option value="">Sin caso asociado</option>
+                  {references.cases.map((currentCase) => (
+                    <option key={currentCase.id} value={currentCase.id}>
+                      {currentCase.clientName} - {currentCase.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
               <div className="space-y-2 sm:col-span-2">
                 <Label htmlFor="description">Descripcion</Label>
-                <Textarea id="description" name="description" className="min-h-[110px]" placeholder="Contexto breve para recordar por que hay que hacer esta accion." />
+                <Textarea
+                  id="description"
+                  name="description"
+                  className="min-h-[110px]"
+                  placeholder="Contexto breve para recordar por que hay que hacer esta accion."
+                />
               </div>
             </div>
             <div className="flex justify-end">
@@ -80,16 +178,15 @@ export default async function RecordatoriosPage() {
 
         <SectionCard
           eyebrow="Criterio"
-          title="Como usarlo"
-          description="En esta fase el modulo es interno, simple y practico."
+          title="Como leer el panel"
+          description="La idea es que la agenda diaria quede visible sin abrir clientes o casos a cada rato."
+          contentClassName="space-y-3"
         >
-          <div className="space-y-3 text-sm leading-6 text-muted-foreground">
-            <div className="rounded-[24px] border border-border/70 bg-white/80 p-4">
-              Prioridad alta para deuda vencida o tareas que no pueden esperar.
-            </div>
-            <div className="rounded-[24px] border border-border/70 bg-white/80 p-4">
-              Despues vamos a sumar automatismos por caso, cliente y calendario.
-            </div>
+          <div className="rounded-[24px] border border-border/70 bg-white/80 p-4 text-sm leading-6 text-muted-foreground">
+            Un recordatorio puede ser general, por cliente o por caso. Si no esta ligado a nada, igual sigue siendo operativo.
+          </div>
+          <div className="rounded-[24px] border border-border/70 bg-white/80 p-4 text-sm leading-6 text-muted-foreground">
+            Los vencidos suben arriba, despues se ordena por fecha y prioridad para que la lista sirva como bandeja diaria.
           </div>
         </SectionCard>
       </div>
@@ -104,7 +201,7 @@ export default async function RecordatoriosPage() {
         <SectionCard
           eyebrow="Pendientes"
           title="Alertas activas"
-          description="Ordenadas para una lectura rapida del trabajo pendiente."
+          description="Ordenadas para que lo mas sensible quede arriba."
           contentClassName="space-y-3"
         >
           {pending.map((item) => {
@@ -118,24 +215,47 @@ export default async function RecordatoriosPage() {
                 key={item.id}
                 className="rounded-[24px] border border-border/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(247,214,224,0.12))] p-5"
               >
-                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                   <div className="space-y-2">
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="text-base font-semibold text-foreground">{item.title}</p>
-                      <StatusChip
-                        label={getPriorityLabel(item.priority)}
-                        tone={getReminderPriorityTone(item.priority)}
-                      />
+                      <StatusChip label={getPriorityLabel(item.priority)} tone={getReminderPriorityTone(item.priority)} />
                     </div>
                     {item.description ? <p className="text-sm text-muted-foreground">{item.description}</p> : null}
                     <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
                       <span className="rounded-full border border-border/80 bg-background px-3 py-1">
                         {formatDateTime(item.reminderDate)}
                       </span>
-                      <span className="rounded-full border border-border/80 bg-background px-3 py-1">
-                        {relatedLabel}
-                      </span>
+                      <span className="rounded-full border border-border/80 bg-background px-3 py-1">{relatedLabel}</span>
                     </div>
+                    <div className="flex flex-wrap gap-2 pt-1 text-xs">
+                      {item.clientId ? (
+                        <Link className="text-[#9a4e69] underline-offset-4 hover:underline" href={`/clientes/${item.clientId}`}>
+                          Ver cliente
+                        </Link>
+                      ) : null}
+                      {item.caseId ? (
+                        <Link className="text-[#9a4e69] underline-offset-4 hover:underline" href={`/casos/${item.caseId}`}>
+                          Ver caso
+                        </Link>
+                      ) : null}
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <form action={handleComplete}>
+                      <input type="hidden" name="reminderId" value={item.id} />
+                      <Button type="submit" variant="secondary">
+                        <CheckCircle2 className="h-4 w-4" />
+                        Resolver
+                      </Button>
+                    </form>
+                    <form action={handleDelete}>
+                      <input type="hidden" name="reminderId" value={item.id} />
+                      <Button type="submit" variant="ghost" className="text-[#9a4e69]">
+                        <Trash2 className="h-4 w-4" />
+                        Eliminar
+                      </Button>
+                    </form>
                   </div>
                 </div>
               </div>
@@ -148,19 +268,28 @@ export default async function RecordatoriosPage() {
         <SectionCard
           eyebrow="Resueltos"
           title="Recordatorios completados"
-          description="Historial reciente de tareas ya cerradas."
+          description="Historial reciente de tareas ya cerradas, con opcion de reabrir si hizo falta."
           contentClassName="space-y-3"
         >
           {done.map((item) => (
             <div
               key={item.id}
-              className="flex items-center gap-3 rounded-[24px] border border-border/70 bg-white/80 px-5 py-4"
+              className="flex flex-col gap-3 rounded-[24px] border border-border/70 bg-white/80 px-5 py-4 lg:flex-row lg:items-center lg:justify-between"
             >
-              <CheckCircle2 className="h-5 w-5 text-[#48745f]" />
-              <div>
-                <p className="text-sm font-medium text-foreground line-through">{item.title}</p>
-                <p className="text-xs text-muted-foreground">{formatDateTime(item.reminderDate)}</p>
+              <div className="flex items-center gap-3">
+                <CheckCircle2 className="h-5 w-5 text-[#48745f]" />
+                <div>
+                  <p className="text-sm font-medium text-foreground line-through">{item.title}</p>
+                  <p className="text-xs text-muted-foreground">{formatDateTime(item.reminderDate)}</p>
+                </div>
               </div>
+              <form action={handleReopen}>
+                <input type="hidden" name="reminderId" value={item.id} />
+                <Button type="submit" variant="ghost">
+                  <RotateCcw className="h-4 w-4" />
+                  Reabrir
+                </Button>
+              </form>
             </div>
           ))}
         </SectionCard>

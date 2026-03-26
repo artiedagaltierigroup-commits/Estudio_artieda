@@ -1,38 +1,47 @@
-import { getDashboardMetrics, getMonthlyIncomeChart } from "@/actions/dashboard";
+import { getAnalyticsSnapshot, getDashboardOverview } from "@/actions/dashboard";
 import { DashboardCharts } from "@/components/dashboard/dashboard-charts";
 import { MetricCard } from "@/components/system/metric-card";
 import { PageHeader } from "@/components/system/page-header";
 import { SectionCard } from "@/components/system/section-card";
-import { formatCurrency } from "@/lib/utils";
+import { StatusChip } from "@/components/system/status-chip";
+import { Button } from "@/components/ui/button";
+import { getReminderPriorityTone } from "@/lib/module-presenters";
+import { getChargeStatusTone } from "@/lib/presentation";
+import { formatCurrency, formatDate, formatDateTime, getChargeStatusLabel } from "@/lib/utils";
 import { endOfMonth, format, startOfMonth } from "date-fns";
 import { es } from "date-fns/locale";
 import {
-  BarChart2,
+  AlarmClockCheck,
+  BellRing,
   Calendar,
   Clock,
   DollarSign,
   Sparkles,
-  Star,
   TrendingDown,
   TrendingUp,
+  Users,
   Wallet,
 } from "lucide-react";
+import Link from "next/link";
 
 export default async function DashboardPage() {
   const now = new Date();
   const from = format(startOfMonth(now), "yyyy-MM-dd");
   const to = format(endOfMonth(now), "yyyy-MM-dd");
 
-  const [metrics, chartData] = await Promise.all([
-    getDashboardMetrics({ from, to }),
-    getMonthlyIncomeChart(12),
+  const [overview, analytics] = await Promise.all([
+    getDashboardOverview({ from, to }),
+    getAnalyticsSnapshot(12),
   ]);
+
+  const { metrics } = overview;
+  const periodLabel = format(now, "MMMM yyyy", { locale: es });
 
   const cards = [
     {
       label: "Ingresos esperados",
       value: formatCurrency(metrics.expectedIncome),
-      subtitle: "Honorarios con vencimiento dentro del mes actual.",
+      subtitle: "Cobros con vencimiento dentro del mes actual.",
       icon: Calendar,
       tone: "rose" as const,
     },
@@ -53,48 +62,44 @@ export default async function DashboardPage() {
     {
       label: "Gastos del mes",
       value: formatCurrency(metrics.periodExpenses + metrics.projectedRecurring),
-      subtitle: "Suma de gastos cargados y recurrentes proyectados.",
+      subtitle: "Gastos reales mas proyeccion recurrente.",
       icon: TrendingDown,
       tone: "danger" as const,
     },
     {
       label: "Resultado neto",
       value: formatCurrency(metrics.netResult),
-      subtitle: "Cobrado real menos gastos del periodo.",
+      subtitle: "Cobrado real menos gasto real y fijo proyectado.",
       icon: Wallet,
       tone: metrics.netResult >= 0 ? ("sage" as const) : ("danger" as const),
     },
     {
-      label: "Ganancia bruta total",
-      value: formatCurrency(metrics.grossIncome),
-      subtitle: "Todo lo cobrado historicamente, sin descontar gastos.",
-      icon: DollarSign,
+      label: "Casos activos",
+      value: `${metrics.activeCases}`,
+      subtitle: `${metrics.overdueCharges} cobro(s) vencido(s) en total.`,
+      icon: Users,
       tone: "lilac" as const,
+    },
+    {
+      label: "Recordatorios abiertos",
+      value: `${metrics.openReminders}`,
+      subtitle: "Seguimientos pendientes dentro de la app.",
+      icon: BellRing,
+      tone: "amber" as const,
     },
     {
       label: "Ganancia neta total",
       value: formatCurrency(metrics.netIncome),
-      subtitle: "Lectura historica luego de egresos cargados.",
-      icon: BarChart2,
+      subtitle: "Todo lo cobrado menos egresos reales historicos.",
+      icon: DollarSign,
       tone: metrics.netIncome >= 0 ? ("slate" as const) : ("danger" as const),
     },
-    {
-      label: "Mejor cliente",
-      value: metrics.topClient?.name ?? "Sin datos",
-      subtitle: metrics.topClient ? formatCurrency(metrics.topClient.total) : "Todavia sin historial suficiente.",
-      icon: Star,
-      tone: "rose" as const,
-    },
   ];
-
-  const periodLabel = format(now, "MMMM yyyy", { locale: es });
 
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="Vista general"
-        title="Dashboard financiero"
-        description="Una lectura serena del estudio: que entra, que sigue pendiente y donde conviene poner foco esta semana."
+        title="Dashboard"
         stats={[
           { label: "Periodo", value: periodLabel },
           { label: "Mejor mes", value: metrics.topMonth?.month ?? "Sin datos" },
@@ -116,12 +121,136 @@ export default async function DashboardPage() {
         ))}
       </div>
 
-      <DashboardCharts chartData={chartData} />
+      <SectionCard
+        eyebrow="Recordatorios"
+        title="Pendientes del dashboard"
+        description="Alertas y tareas abiertas para que no queden escondidas dentro del panel."
+        contentClassName="p-0"
+      >
+        {overview.urgentReminders.length === 0 ? (
+          <div className="px-6 py-8 text-sm text-muted-foreground">
+            No hay recordatorios abiertos para este momento.
+          </div>
+        ) : (
+          <div className="grid gap-0 lg:grid-cols-3">
+            {overview.urgentReminders.map((reminder) => (
+              <div key={reminder.id} className="space-y-3 border-b border-border/80 px-6 py-5 lg:border-b-0 lg:border-r last:border-r-0">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="font-medium text-foreground">{reminder.title}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {reminder.caseTitle ?? reminder.clientName ?? "General"}
+                    </p>
+                  </div>
+                  <StatusChip label={reminder.priority} tone={getReminderPriorityTone(reminder.priority)} />
+                </div>
+                <p className="text-xs text-muted-foreground">{formatDateTime(reminder.reminderDate)}</p>
+                <Link href="/recordatorios" className="text-xs font-medium text-primary hover:underline">
+                  Ver recordatorios
+                </Link>
+              </div>
+            ))}
+          </div>
+        )}
+      </SectionCard>
+
+      <DashboardCharts monthlyNet={analytics.monthlyNet} />
+
+      <div className="grid gap-6 xl:grid-cols-3">
+        <SectionCard
+          eyebrow="Proximos vencimientos"
+          title="Cobros a seguir"
+          description="Compromisos abiertos ordenados por vencimiento."
+          contentClassName="p-0"
+        >
+          {overview.upcomingCharges.length === 0 ? (
+            <div className="px-6 py-8 text-sm text-muted-foreground">No hay cobros abiertos para seguir ahora mismo.</div>
+          ) : (
+            <ul className="divide-y divide-border/80">
+              {overview.upcomingCharges.map((charge) => (
+                <li key={charge.id} className="space-y-2 px-6 py-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-medium text-foreground">{charge.description}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {charge.clientName} · {charge.caseTitle}
+                      </p>
+                    </div>
+                    <StatusChip
+                      label={getChargeStatusLabel(charge.derivedStatus)}
+                      tone={getChargeStatusTone(charge.derivedStatus)}
+                    />
+                  </div>
+                  <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                    <span className="rounded-full border border-border/80 bg-background px-3 py-1">
+                      Vence: {formatDate(charge.dueDate)}
+                    </span>
+                    <span className="rounded-full border border-border/80 bg-background px-3 py-1">
+                      Saldo: {formatCurrency(charge.balance)}
+                    </span>
+                  </div>
+                  <div>
+                    <Link href={`/cobros/${charge.id}`} className="text-xs font-medium text-primary hover:underline">
+                      Abrir cobro
+                    </Link>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </SectionCard>
+
+        <SectionCard
+          eyebrow="Clientes con deuda"
+          title="Foco comercial"
+          description="Clientes con mayor saldo pendiente acumulado."
+          contentClassName="p-0"
+        >
+          {overview.debtClients.length === 0 ? (
+            <div className="px-6 py-8 text-sm text-muted-foreground">Todavia no hay deuda pendiente acumulada.</div>
+          ) : (
+            <ul className="divide-y divide-border/80">
+              {overview.debtClients.map((client) => (
+                <li key={client.clientId} className="space-y-2 px-6 py-4">
+                  <p className="font-medium text-foreground">{client.clientName}</p>
+                  <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                    <span className="rounded-full border border-border/80 bg-background px-3 py-1">
+                      Cobrado: {formatCurrency(client.collected)}
+                    </span>
+                    <span className="rounded-full border border-border/80 bg-background px-3 py-1">
+                      Deuda: {formatCurrency(client.balance)}
+                    </span>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </SectionCard>
+
+        <SectionCard
+          eyebrow="Recordatorios"
+          title="Panel rapido"
+          description="Acceso directo al modulo completo de seguimiento."
+        >
+          <div className="space-y-4">
+            <div className="rounded-[24px] border border-border/70 bg-white/85 p-5">
+              <p className="text-sm font-semibold text-foreground">Abiertos ahora</p>
+              <p className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-foreground">{metrics.openReminders}</p>
+              <p className="mt-2 text-xs text-muted-foreground">
+                Recordatorios pendientes entre clientes, casos y tareas generales.
+              </p>
+            </div>
+            <Button asChild variant="outline" className="w-full justify-center">
+              <Link href="/recordatorios">Abrir recordatorios</Link>
+            </Button>
+          </div>
+        </SectionCard>
+      </div>
 
       <SectionCard
         eyebrow="Enfoque sugerido"
         title="Lo que conviene mirar a continuacion"
-        description="Este bloque deja visibles los tres datos que suelen disparar seguimiento comercial o financiero."
+        description="Tres indicadores simples para orientar la accion inmediata."
         className="bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(247,214,224,0.12))]"
       >
         <div className="grid gap-4 md:grid-cols-3">
@@ -159,9 +288,7 @@ export default async function DashboardPage() {
               {metrics.topClient?.name ?? "Sin datos suficientes"}
             </p>
             {metrics.topClient ? (
-              <p className="mt-2 text-sm text-muted-foreground">
-                {formatCurrency(metrics.topClient.total)} acumulados.
-              </p>
+              <p className="mt-2 text-sm text-muted-foreground">{formatCurrency(metrics.topClient.total)} acumulados.</p>
             ) : null}
           </div>
         </div>

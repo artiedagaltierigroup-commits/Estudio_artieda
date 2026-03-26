@@ -7,13 +7,40 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+export function normalizeMoneyValue(value: number | string | null | undefined): string {
+  if (value === null || value === undefined) return "";
+
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? Math.round(value).toString() : "";
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+
+  if (/^-?\d+[.,]\d{1,2}$/.test(trimmed)) {
+    const parsed = Number(trimmed.replace(",", "."));
+    return Number.isFinite(parsed) ? Math.round(parsed).toString() : "";
+  }
+
+  return trimmed.replace(/\D/g, "").replace(/^0+(?=\d)/, "");
+}
+
+export function formatMoneyInput(value: number | string | null | undefined): string {
+  const normalized = normalizeMoneyValue(value);
+  if (!normalized) return "";
+
+  return new Intl.NumberFormat("es-AR", {
+    maximumFractionDigits: 0,
+  }).format(Number(normalized));
+}
+
 export function formatCurrency(value: number | string | null | undefined): string {
   if (value === null || value === undefined) return "$0";
   const numericValue = typeof value === "string" ? parseFloat(value) : value;
 
-  return new Intl.NumberFormat("es-CL", {
+  return new Intl.NumberFormat("es-AR", {
     style: "currency",
-    currency: "CLP",
+    currency: "ARS",
     minimumFractionDigits: 0,
   }).format(numericValue);
 }

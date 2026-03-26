@@ -1,4 +1,5 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { InfoPopover } from "@/components/system/info-popover";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import type { ReactNode } from "react";
 
@@ -30,9 +31,9 @@ export function SectionCard({
               {eyebrow}
             </p>
           ) : null}
-          <div className="space-y-1">
+          <div className="flex items-center gap-1.5">
             <CardTitle>{title}</CardTitle>
-            {description ? <CardDescription className="leading-6">{description}</CardDescription> : null}
+            {description ? <InfoPopover content={description} className="-mt-0.5" /> : null}
           </div>
         </div>
         {actions ? <div className="flex flex-wrap items-center gap-3">{actions}</div> : null}

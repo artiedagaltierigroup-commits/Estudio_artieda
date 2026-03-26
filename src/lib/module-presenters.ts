@@ -26,12 +26,13 @@ export function getCalendarEventLabel(type: string): string {
 export function getCalendarEventTone(type: string): VisualTone {
   switch (type) {
     case "charge":
-      return "lilac";
+      return "sage";
     case "reminder":
       return "amber";
     case "expense":
       return "danger";
     case "recurring":
+      return "lilac";
     default:
       return "rose";
   }
@@ -59,4 +60,29 @@ export function getActivityEntityLabel(entityType: string): string {
   };
 
   return labels[entityType] ?? entityType;
+}
+
+export function getClientPortfolioStatusLabel(status: string): string {
+  const labels: Record<string, string> = {
+    OVERDUE: "Con deuda vencida",
+    ACTIVE: "Activo",
+    FOLLOW_UP: "En seguimiento",
+    IDLE: "Sin movimiento",
+  };
+
+  return labels[status] ?? status;
+}
+
+export function getClientPortfolioStatusTone(status: string): VisualTone {
+  switch (status) {
+    case "OVERDUE":
+      return "danger";
+    case "ACTIVE":
+      return "sage";
+    case "FOLLOW_UP":
+      return "amber";
+    case "IDLE":
+    default:
+      return "slate";
+  }
 }

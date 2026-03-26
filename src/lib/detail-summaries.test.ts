@@ -17,6 +17,15 @@ describe("summarizeClientCases", () => {
       closed: 1,
     });
   });
+
+  it("returns zeroed counters for an empty client portfolio", () => {
+    expect(summarizeClientCases([])).toEqual({
+      total: 0,
+      active: 0,
+      suspended: 0,
+      closed: 0,
+    });
+  });
 });
 
 describe("summarizeCaseCharges", () => {
@@ -47,6 +56,28 @@ describe("summarizeCaseCharges", () => {
       overdue: 1,
       partial: 1,
       paid: 1,
+      pending: 0,
+    });
+  });
+
+  it("ignores cancelled charges in financial totals and status counters", () => {
+    const summary = summarizeCaseCharges([
+      {
+        amountTotal: "100000",
+        dueDate: "2099-01-01",
+        cancelledAt: "2026-03-17T10:00:00.000Z",
+        payments: [{ amount: "10000" }],
+      },
+    ]);
+
+    expect(summary).toEqual({
+      total: 1,
+      expected: 0,
+      collected: 0,
+      balance: 0,
+      overdue: 0,
+      partial: 0,
+      paid: 0,
       pending: 0,
     });
   });

@@ -2,15 +2,17 @@
 
 import { createClient } from "@/lib/supabase/client";
 import { usePathname, useRouter } from "next/navigation";
-import { CalendarDays, LogOut } from "lucide-react";
+import { LogOut, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { toast } from "sonner";
 import { getRouteMeta } from "@/lib/app-shell";
 
 interface HeaderProps {
   email?: string;
+  sidebarCollapsed: boolean;
+  onToggleSidebar: () => void;
 }
 
-export function Header({ email }: HeaderProps) {
+export function Header({ email, sidebarCollapsed, onToggleSidebar }: HeaderProps) {
   const router = useRouter();
   const pathname = usePathname();
   const supabase = createClient();
@@ -25,15 +27,18 @@ export function Header({ email }: HeaderProps) {
 
   return (
     <header className="flex flex-shrink-0 items-center justify-between border-b border-border/80 bg-card/80 px-6 py-4 backdrop-blur">
-      <div>
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={onToggleSidebar}
+          className="hidden h-10 w-10 items-center justify-center rounded-2xl border border-border bg-background text-muted-foreground transition-colors hover:text-foreground md:inline-flex"
+          title={sidebarCollapsed ? "Expandir menu lateral" : "Ocultar menu lateral"}
+        >
+          {sidebarCollapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
+        </button>
         <p className="text-lg font-semibold text-foreground">{routeMeta.title}</p>
-        <p className="text-sm text-muted-foreground">{routeMeta.description}</p>
       </div>
       <div className="flex items-center gap-4">
-        <div className="hidden items-center gap-2 rounded-full border border-border bg-background px-3 py-2 text-xs text-muted-foreground lg:flex">
-          <CalendarDays className="h-3.5 w-3.5 text-primary" />
-          Operacion diaria
-        </div>
         {email && <span className="hidden text-sm text-muted-foreground sm:block">{email}</span>}
         <button
           onClick={handleLogout}

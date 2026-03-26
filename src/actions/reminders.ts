@@ -40,6 +40,31 @@ export async function getReminders() {
   });
 }
 
+export async function getReminderReferences() {
+  const userId = await getUserId();
+
+  const [clientRows, caseRows] = await Promise.all([
+    db.query.clients.findMany({
+      where: (item, { eq: eqOperator }) => eqOperator(item.userId, userId),
+      orderBy: (item, { asc }) => [asc(item.name)],
+    }),
+    db.query.cases.findMany({
+      where: (item, { eq: eqOperator }) => eqOperator(item.userId, userId),
+      orderBy: (item, { asc }) => [asc(item.title)],
+      with: { client: true },
+    }),
+  ]);
+
+  return {
+    clients: clientRows.map((client) => ({ id: client.id, name: client.name })),
+    cases: caseRows.map((currentCase) => ({
+      id: currentCase.id,
+      title: currentCase.title,
+      clientName: currentCase.client.name,
+    })),
+  };
+}
+
 export async function createReminder(formData: FormData) {
   const userId = await getUserId();
   const raw = Object.fromEntries(formData.entries());
@@ -93,11 +118,53 @@ export async function updateReminder(id: string, formData: FormData) {
 
 export async function completeReminder(id: string) {
   const userId = await getUserId();
+  const existing = await db.query.reminders.findFirst({
+    where: (item, { and: andOperator, eq: eqOperator }) =>
+      andOperator(eqOperator(item.id, id), eqOperator(item.userId, userId)),
+  });
+  if (!existing) return { error: "Recordatorio no encontrado" };
 
   await db
     .update(reminders)
     .set({ completed: true, completedAt: new Date(), updatedAt: new Date() })
     .where(and(eq(reminders.id, id), eq(reminders.userId, userId)));
+
+  await logActivity({
+    userId,
+    entityType: "reminder",
+    entityId: id,
+    action: "status_changed",
+    previousValue: { completed: existing.completed, completedAt: existing.completedAt },
+    newValue: { completed: true, completedAt: new Date() },
+    note: "Recordatorio marcado como resuelto",
+  });
+
+  revalidatePath("/recordatorios");
+  return { success: true };
+}
+
+export async function reopenReminder(id: string) {
+  const userId = await getUserId();
+  const existing = await db.query.reminders.findFirst({
+    where: (item, { and: andOperator, eq: eqOperator }) =>
+      andOperator(eqOperator(item.id, id), eqOperator(item.userId, userId)),
+  });
+  if (!existing) return { error: "Recordatorio no encontrado" };
+
+  await db
+    .update(reminders)
+    .set({ completed: false, completedAt: null, updatedAt: new Date() })
+    .where(and(eq(reminders.id, id), eq(reminders.userId, userId)));
+
+  await logActivity({
+    userId,
+    entityType: "reminder",
+    entityId: id,
+    action: "status_changed",
+    previousValue: { completed: existing.completed, completedAt: existing.completedAt },
+    newValue: { completed: false, completedAt: null },
+    note: "Recordatorio reabierto",
+  });
 
   revalidatePath("/recordatorios");
   return { success: true };
@@ -105,7 +172,22 @@ export async function completeReminder(id: string) {
 
 export async function deleteReminder(id: string) {
   const userId = await getUserId();
+  const existing = await db.query.reminders.findFirst({
+    where: (item, { and: andOperator, eq: eqOperator }) =>
+      andOperator(eqOperator(item.id, id), eqOperator(item.userId, userId)),
+  });
+  if (!existing) return { error: "Recordatorio no encontrado" };
+
   await db.delete(reminders).where(and(eq(reminders.id, id), eq(reminders.userId, userId)));
+
+  await logActivity({
+    userId,
+    entityType: "reminder",
+    entityId: id,
+    action: "deleted",
+    previousValue: existing as Record<string, unknown>,
+  });
+
   revalidatePath("/recordatorios");
   return { success: true };
 }
