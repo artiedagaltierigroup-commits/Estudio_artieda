@@ -93,11 +93,11 @@ export default async function CobrosPage({ searchParams }: CobrosPageProps) {
           tone="sage"
         />
         <MetricCard
-          label="Pendiente"
-          value={formatCurrency(totals.balance)}
-          subtitle="Saldo que todavia falta recuperar."
-          icon={Clock3}
-          tone="amber"
+          label="Programados"
+          value={formatCurrency(totals.total)}
+          subtitle="Monto comprometido entre todos los cobros visibles."
+          icon={Coins}
+          tone="lilac"
         />
         <MetricCard
           label="Vencidos"
@@ -107,11 +107,11 @@ export default async function CobrosPage({ searchParams }: CobrosPageProps) {
           tone="danger"
         />
         <MetricCard
-          label="Programados"
-          value={formatCurrency(totals.total)}
-          subtitle="Monto comprometido entre todos los cobros visibles."
-          icon={Coins}
-          tone="lilac"
+          label="Pendiente"
+          value={formatCurrency(totals.balance)}
+          subtitle="Saldo que todavia falta recuperar."
+          icon={Clock3}
+          tone="amber"
         />
       </div>
 
