@@ -1,17 +1,26 @@
+import {
+  getRecurringPayableChecklist,
+  markRecurringOccurrencePaid,
+  reopenRecurringOccurrence,
+} from "@/actions/recurring-expense-occurrences";
 import { getExpenses } from "@/actions/expenses";
 import { getRecurringExpenses } from "@/actions/recurring-expenses";
 import { getDashboardOverview } from "@/actions/dashboard";
+import { RecurringPayablesChecklist } from "@/components/dashboard/recurring-payables-checklist";
+import { AutomaticRecurringOverview } from "@/components/expenses/automatic-recurring-overview";
 import { EmptyState } from "@/components/system/empty-state";
 import { MetricCard } from "@/components/system/metric-card";
 import { PageHeader } from "@/components/system/page-header";
 import { SectionCard } from "@/components/system/section-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { buildAutomaticRecurringOverview } from "@/lib/automatic-recurring-overview";
 import { buildExpenseMonthBoard, summarizeExpenseMetrics } from "@/lib/expense-insights";
 import { formatCurrency, formatDate, getExpenseOriginLabel, getExpenseTypeLabel } from "@/lib/utils";
 import { Plus, Receipt, RefreshCcw, Search, Wallet } from "lucide-react";
 import { endOfMonth, format, startOfMonth } from "date-fns";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
 const selectClassName =
   "flex h-11 w-full rounded-2xl border border-input bg-background px-4 py-2 text-sm text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
@@ -24,6 +33,24 @@ interface GastosPageProps {
 }
 
 export default async function GastosPage({ searchParams }: GastosPageProps) {
+  async function handleMarkPaid(formData: FormData) {
+    "use server";
+    const occurrenceId = String(formData.get("occurrenceId") ?? "");
+    if (occurrenceId) {
+      await markRecurringOccurrencePaid(occurrenceId);
+    }
+    redirect("/gastos");
+  }
+
+  async function handleReopen(formData: FormData) {
+    "use server";
+    const occurrenceId = String(formData.get("occurrenceId") ?? "");
+    if (occurrenceId) {
+      await reopenRecurringOccurrence(occurrenceId);
+    }
+    redirect("/gastos");
+  }
+
   const params = (await searchParams) ?? {};
   const filters = {
     query: params.q?.trim() ?? "",
@@ -33,12 +60,14 @@ export default async function GastosPage({ searchParams }: GastosPageProps) {
   const from = format(startOfMonth(today), "yyyy-MM-dd");
   const to = format(endOfMonth(today), "yyyy-MM-dd");
 
-  const [expenseList, recurringList, monthOverview] = await Promise.all([
+  const [expenseList, recurringList, monthOverview, recurringChecklist] = await Promise.all([
     getExpenses(filters),
     getRecurringExpenses(),
     getDashboardOverview({ from, to }),
+    getRecurringPayableChecklist(today),
   ]);
   const metrics = summarizeExpenseMetrics({ expenses: expenseList, recurring: recurringList });
+  const automaticRecurringOverview = buildAutomaticRecurringOverview(recurringList, today);
   const monthBoard = buildExpenseMonthBoard({
     expectedIncome: monthOverview.metrics.expectedIncome,
     collectedIncome: monthOverview.metrics.collectedIncome,
@@ -163,6 +192,15 @@ export default async function GastosPage({ searchParams }: GastosPageProps) {
           </div>
         </div>
       </SectionCard>
+
+      <RecurringPayablesChecklist
+        pending={recurringChecklist.pending}
+        paid={recurringChecklist.paid}
+        onMarkPaid={handleMarkPaid}
+        onReopen={handleReopen}
+      />
+
+      <AutomaticRecurringOverview items={automaticRecurringOverview} />
 
       <SectionCard
         eyebrow="Vista operativa"
