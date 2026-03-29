@@ -8,7 +8,7 @@ import { SectionCard } from "@/components/system/section-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { buildExpenseMonthBoard, summarizeExpenseMetrics } from "@/lib/expense-insights";
-import { formatCurrency, formatDate, getExpenseTypeLabel } from "@/lib/utils";
+import { formatCurrency, formatDate, getExpenseOriginLabel, getExpenseTypeLabel } from "@/lib/utils";
 import { Plus, Receipt, RefreshCcw, Search, Wallet } from "lucide-react";
 import { endOfMonth, format, startOfMonth } from "date-fns";
 import Link from "next/link";
@@ -245,6 +245,11 @@ export default async function GastosPage({ searchParams }: GastosPageProps) {
                     <td className="px-6 py-4">
                       <div>
                         <p className="font-semibold text-foreground">{item.description}</p>
+                        <div className="mt-1 flex flex-wrap gap-2 text-[0.72rem] text-muted-foreground">
+                          <span className="rounded-full border border-border/80 bg-background px-3 py-1">
+                            {getExpenseOriginLabel(item.origin)}
+                          </span>
+                        </div>
                         {item.notes ? <p className="mt-1 text-xs text-muted-foreground">{item.notes}</p> : null}
                       </div>
                     </td>

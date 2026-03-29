@@ -6,6 +6,10 @@ import {
   getReminders,
   reopenReminder,
 } from "@/actions/reminders";
+import {
+  getRecurringPayableAlerts,
+  markRecurringOccurrencePaid,
+} from "@/actions/recurring-expense-occurrences";
 import { EmptyState } from "@/components/system/empty-state";
 import { MetricCard } from "@/components/system/metric-card";
 import { PageHeader } from "@/components/system/page-header";
@@ -17,7 +21,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { getReminderPriorityTone } from "@/lib/module-presenters";
 import { sortRemindersForPanel, summarizeReminderPanel } from "@/lib/operations-insights";
-import { formatDateTime, getPriorityLabel } from "@/lib/utils";
+import { formatCurrency, formatDate, formatDateTime, getPriorityLabel } from "@/lib/utils";
 import { Bell, CalendarCheck2, CheckCircle2, Clock3, Plus, RotateCcw, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -55,11 +59,24 @@ async function handleDelete(formData: FormData) {
   redirect("/recordatorios");
 }
 
+async function handlePayRecurring(formData: FormData) {
+  "use server";
+  const occurrenceId = String(formData.get("occurrenceId") ?? "");
+  if (occurrenceId) {
+    await markRecurringOccurrencePaid(occurrenceId);
+  }
+  redirect("/recordatorios");
+}
+
 const selectClassName =
   "flex h-11 w-full rounded-2xl border border-input bg-background px-4 py-2 text-sm text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
 export default async function RecordatoriosPage() {
-  const [list, references] = await Promise.all([getReminders(), getReminderReferences()]);
+  const [list, references, recurringAlerts] = await Promise.all([
+    getReminders(),
+    getReminderReferences(),
+    getRecurringPayableAlerts(new Date()),
+  ]);
   const summary = summarizeReminderPanel(list);
   const pending = sortRemindersForPanel(list.filter((item) => !item.completed));
   const done = [...list.filter((item) => item.completed)].sort(
@@ -290,6 +307,49 @@ export default async function RecordatoriosPage() {
                   Reabrir
                 </Button>
               </form>
+            </div>
+          ))}
+        </SectionCard>
+      ) : null}
+
+      {recurringAlerts.length > 0 ? (
+        <SectionCard
+          eyebrow="Gastos por pagar"
+          title="Alertas de recurrentes"
+          description="Obligaciones recurrentes visibles con el mismo criterio operativo del modulo."
+          contentClassName="space-y-3"
+        >
+          {recurringAlerts.map((item) => (
+            <div
+              key={item.id}
+              className="rounded-[24px] border border-border/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(247,214,224,0.12))] p-5"
+            >
+              <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                <div className="space-y-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-base font-semibold text-foreground">{item.title}</p>
+                    <StatusChip label={getPriorityLabel(item.priority)} tone={getReminderPriorityTone(item.priority)} />
+                    <StatusChip label={item.status === "OVERDUE" ? "Vencido" : "Pendiente"} tone={item.status === "OVERDUE" ? "danger" : "amber"} />
+                  </div>
+                  <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                    <span className="rounded-full border border-border/80 bg-background px-3 py-1">
+                      Vence {formatDate(item.reminderDate.toISOString().slice(0, 10))}
+                    </span>
+                    <span className="rounded-full border border-border/80 bg-background px-3 py-1">
+                      {formatCurrency(item.amount)}
+                    </span>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <form action={handlePayRecurring}>
+                    <input type="hidden" name="occurrenceId" value={item.id} />
+                    <Button type="submit" variant="secondary">
+                      <CheckCircle2 className="h-4 w-4" />
+                      Marcar pagado
+                    </Button>
+                  </form>
+                </div>
+              </div>
             </div>
           ))}
         </SectionCard>

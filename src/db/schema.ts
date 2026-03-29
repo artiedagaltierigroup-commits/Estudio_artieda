@@ -4,12 +4,14 @@ import {
   check,
   date,
   decimal,
+  integer,
   index,
   jsonb,
   pgEnum,
   pgTable,
   text,
   timestamp,
+  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 
@@ -17,8 +19,16 @@ export const caseStatusEnum = pgEnum("case_status", ["ACTIVE", "CLOSED", "SUSPEN
 export const casePriorityEnum = pgEnum("case_priority", ["LOW", "MEDIUM", "HIGH"]);
 export const chargeStatusEnum = pgEnum("charge_status", ["PENDING", "PARTIAL", "PAID", "OVERDUE"]);
 export const expenseTypeEnum = pgEnum("expense_type", ["OPERATIVE", "TAX", "SERVICE", "OTHER"]);
-export const frequencyEnum = pgEnum("frequency", ["monthly", "quarterly", "yearly"]);
+export const frequencyEnum = pgEnum("frequency", ["monthly", "quarterly", "semiannual", "yearly"]);
 export const reminderPriorityEnum = pgEnum("reminder_priority", ["LOW", "MEDIUM", "HIGH"]);
+export const recurringExpenseModeEnum = pgEnum("recurring_expense_mode", ["AUTOMATIC", "PAYABLE"]);
+export const recurringExpenseOccurrenceStatusEnum = pgEnum("recurring_expense_occurrence_status", [
+  "PENDING",
+  "PAID",
+  "OVERDUE",
+  "GENERATED",
+]);
+export const expenseOriginEnum = pgEnum("expense_origin", ["MANUAL", "RECURRING_AUTOMATIC", "RECURRING_PAYABLE"]);
 export const entityTypeEnum = pgEnum("entity_type", ["case", "charge", "payment", "expense", "reminder"]);
 export const actionTypeEnum = pgEnum("action_type", [
   "created",
@@ -140,6 +150,8 @@ export const expenses = pgTable(
     description: text("description").notNull(),
     amount: decimal("amount", { precision: 12, scale: 2 }).notNull(),
     type: expenseTypeEnum("type").notNull().default("OPERATIVE"),
+    origin: expenseOriginEnum("origin").notNull().default("MANUAL"),
+    recurringExpenseId: uuid("recurring_expense_id").references(() => recurringExpenses.id, { onDelete: "set null" }),
     category: text("category"),
     date: date("date").notNull(),
     appliesToMonth: date("applies_to_month"),
@@ -167,10 +179,14 @@ export const recurringExpenses = pgTable(
     description: text("description").notNull(),
     amount: decimal("amount", { precision: 12, scale: 2 }).notNull(),
     type: expenseTypeEnum("type").notNull().default("OPERATIVE"),
+    mode: recurringExpenseModeEnum("mode").notNull().default("AUTOMATIC"),
+    priority: reminderPriorityEnum("priority").notNull().default("MEDIUM"),
     category: text("category"),
     frequency: frequencyEnum("frequency").notNull().default("monthly"),
     startDate: date("start_date").notNull(),
     endDate: date("end_date"),
+    notifyDaysBefore: integer("notify_days_before").notNull().default(0),
+    payableDayOfMonth: integer("payable_day_of_month"),
     active: boolean("active").notNull().default(true),
     notes: text("notes"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
@@ -181,9 +197,44 @@ export const recurringExpenses = pgTable(
     activeIdx: index("recurring_expenses_active_idx").on(table.userId, table.active),
     frequencyIdx: index("recurring_expenses_frequency_idx").on(table.frequency),
     amountPositiveCheck: check("recurring_expenses_amount_positive_check", sql`${table.amount} > 0`),
+    notifyDaysBeforeCheck: check(
+      "recurring_expenses_notify_days_before_check",
+      sql`${table.notifyDaysBefore} >= 0 AND ${table.notifyDaysBefore} <= 15`
+    ),
+    payableDayOfMonthCheck: check(
+      "recurring_expenses_payable_day_of_month_check",
+      sql`${table.payableDayOfMonth} IS NULL OR (${table.payableDayOfMonth} >= 1 AND ${table.payableDayOfMonth} <= 31)`
+    ),
     dateOrderCheck: check(
       "recurring_expenses_date_order_check",
       sql`${table.endDate} IS NULL OR ${table.endDate} >= ${table.startDate}`
+    ),
+  })
+);
+
+export const recurringExpenseOccurrences = pgTable(
+  "recurring_expense_occurrences",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id").notNull(),
+    recurringExpenseId: uuid("recurring_expense_id")
+      .notNull()
+      .references(() => recurringExpenses.id, { onDelete: "cascade" }),
+    dueDate: date("due_date").notNull(),
+    status: recurringExpenseOccurrenceStatusEnum("status").notNull().default("PENDING"),
+    expenseId: uuid("expense_id").references(() => expenses.id, { onDelete: "set null" }),
+    paidAt: timestamp("paid_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    userIdIdx: index("recurring_expense_occurrences_user_id_idx").on(table.userId),
+    dueDateIdx: index("recurring_expense_occurrences_due_date_idx").on(table.userId, table.dueDate),
+    statusIdx: index("recurring_expense_occurrences_status_idx").on(table.userId, table.status),
+    recurringExpenseIdx: index("recurring_expense_occurrences_recurring_expense_id_idx").on(table.recurringExpenseId),
+    recurringExpenseDueDateUniqueIdx: uniqueIndex("recurring_expense_occurrences_unique_idx").on(
+      table.recurringExpenseId,
+      table.dueDate
     ),
   })
 );

@@ -5,7 +5,7 @@ import { SectionCard } from "@/components/system/section-card";
 import { StatusChip } from "@/components/system/status-chip";
 import { Button } from "@/components/ui/button";
 import { RecurringExpenseForm } from "@/components/expenses/recurring-expense-form";
-import { formatCurrency, getExpenseTypeLabel, getFrequencyLabel } from "@/lib/utils";
+import { formatCurrency, getExpenseTypeLabel, getFrequencyLabel, getPriorityLabel, getRecurringModeLabel } from "@/lib/utils";
 import { ArrowLeft, RefreshCcw } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -19,6 +19,7 @@ async function handleCreate(formData: FormData) {
 export default async function GastosRecurrentesPage() {
   const list = await getRecurringExpenses();
   const activeCount = list.filter((item) => item.active).length;
+  const payableCount = list.filter((item) => item.mode === "PAYABLE").length;
 
   return (
     <div className="space-y-6">
@@ -29,7 +30,8 @@ export default async function GastosRecurrentesPage() {
         stats={[
           { label: "Registros", value: `${list.length}` },
           { label: "Activos", value: `${activeCount}` },
-          { label: "Frecuencias", value: "Mensual, trimestral y anual" },
+          { label: "Por pagar", value: `${payableCount}` },
+          { label: "Frecuencias", value: "Mensual, trimestral, semestral y anual" },
         ]}
         actions={
           <Button asChild variant="outline">
@@ -68,17 +70,31 @@ export default async function GastosRecurrentesPage() {
                 </div>
                 <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
                   <span className="rounded-full border border-border/80 bg-background px-3 py-1">
+                    {getRecurringModeLabel(item.mode)}
+                  </span>
+                  <span className="rounded-full border border-border/80 bg-background px-3 py-1">
                     {getExpenseTypeLabel(item.type)}
                   </span>
                   <span className="rounded-full border border-border/80 bg-background px-3 py-1">
                     {getFrequencyLabel(item.frequency)}
                   </span>
+                  {item.mode === "PAYABLE" ? (
+                    <span className="rounded-full border border-border/80 bg-background px-3 py-1">
+                      Prioridad {getPriorityLabel(item.priority).toLowerCase()}
+                    </span>
+                  ) : null}
                   <span className="rounded-full border border-border/80 bg-background px-3 py-1">
                     {item.category ?? "Sin categoria"}
                   </span>
-                  <span className="rounded-full border border-border/80 bg-background px-3 py-1">
-                    Desde {item.startDate}
-                  </span>
+                  {item.mode === "AUTOMATIC" ? (
+                    <span className="rounded-full border border-border/80 bg-background px-3 py-1">
+                      Desde {item.startDate}
+                    </span>
+                  ) : (
+                    <span className="rounded-full border border-border/80 bg-background px-3 py-1">
+                      Dia {item.payableDayOfMonth} · avisa {item.notifyDaysBefore} dia(s) antes
+                    </span>
+                  )}
                 </div>
               </div>
               <div className="flex items-center gap-4">

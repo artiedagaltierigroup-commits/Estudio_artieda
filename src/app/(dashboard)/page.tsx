@@ -1,4 +1,10 @@
 import { getAnalyticsSnapshot, getDashboardOverview } from "@/actions/dashboard";
+import {
+  getRecurringPayableChecklist,
+  markRecurringOccurrencePaid,
+  reopenRecurringOccurrence,
+} from "@/actions/recurring-expense-occurrences";
+import { RecurringPayablesChecklist } from "@/components/dashboard/recurring-payables-checklist";
 import { DashboardCharts } from "@/components/dashboard/dashboard-charts";
 import { MetricCard } from "@/components/system/metric-card";
 import { PageHeader } from "@/components/system/page-header";
@@ -23,15 +29,35 @@ import {
   Wallet,
 } from "lucide-react";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
 export default async function DashboardPage() {
+  async function handleMarkPaid(formData: FormData) {
+    "use server";
+    const occurrenceId = String(formData.get("occurrenceId") ?? "");
+    if (occurrenceId) {
+      await markRecurringOccurrencePaid(occurrenceId);
+    }
+    redirect("/");
+  }
+
+  async function handleReopen(formData: FormData) {
+    "use server";
+    const occurrenceId = String(formData.get("occurrenceId") ?? "");
+    if (occurrenceId) {
+      await reopenRecurringOccurrence(occurrenceId);
+    }
+    redirect("/");
+  }
+
   const now = new Date();
   const from = format(startOfMonth(now), "yyyy-MM-dd");
   const to = format(endOfMonth(now), "yyyy-MM-dd");
 
-  const [overview, analytics] = await Promise.all([
+  const [overview, analytics, recurringChecklist] = await Promise.all([
     getDashboardOverview({ from, to }),
     getAnalyticsSnapshot(12),
+    getRecurringPayableChecklist(now),
   ]);
 
   const { metrics } = overview;
@@ -153,6 +179,13 @@ export default async function DashboardPage() {
           </div>
         )}
       </SectionCard>
+
+      <RecurringPayablesChecklist
+        pending={recurringChecklist.pending}
+        paid={recurringChecklist.paid}
+        onMarkPaid={handleMarkPaid}
+        onReopen={handleReopen}
+      />
 
       <DashboardCharts monthlyNet={analytics.monthlyNet} />
 

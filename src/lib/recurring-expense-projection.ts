@@ -10,7 +10,7 @@ import {
 export interface RecurringProjectionInput {
   amount: string | number;
   active: boolean;
-  frequency: "monthly" | "quarterly" | "yearly";
+  frequency: "monthly" | "quarterly" | "semiannual" | "yearly";
   startDate: string;
   endDate: string | null;
 }
@@ -45,6 +45,9 @@ export function calculateMonthlyProjection(items: RecurringProjectionInput[], ta
           break;
         case "quarterly":
           cursor = addQuarters(cursor, 1);
+          break;
+        case "semiannual":
+          cursor = addMonths(cursor, 6);
           break;
         case "yearly":
           cursor = addYears(cursor, 1);

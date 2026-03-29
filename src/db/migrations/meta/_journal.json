@@ -29,6 +29,13 @@
       "when": 1773777082716,
       "tag": "0003_illegal_stranger",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1774800000000,
+      "tag": "0004_recurring_expense_modes",
+      "breakpoints": true
     }
   ]
 }

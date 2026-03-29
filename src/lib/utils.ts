@@ -113,10 +113,30 @@ export function getFrequencyLabel(freq: string): string {
   const labels: Record<string, string> = {
     monthly: "Mensual",
     quarterly: "Trimestral",
+    semiannual: "Semestral",
     yearly: "Anual",
   };
 
   return labels[freq] ?? freq;
+}
+
+export function getRecurringModeLabel(mode: string): string {
+  const labels: Record<string, string> = {
+    AUTOMATIC: "Gasto programado",
+    PAYABLE: "Gasto por pagar",
+  };
+
+  return labels[mode] ?? mode;
+}
+
+export function getExpenseOriginLabel(origin: string): string {
+  const labels: Record<string, string> = {
+    MANUAL: "Manual",
+    RECURRING_AUTOMATIC: "Programado",
+    RECURRING_PAYABLE: "Por pagar",
+  };
+
+  return labels[origin] ?? origin;
 }
 
 export function deriveChargeStatus(

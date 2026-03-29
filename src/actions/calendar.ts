@@ -1,7 +1,8 @@
 "use server";
 
-import { addMonths, addQuarters, addYears, format, isAfter, isBefore, parseISO } from "date-fns";
+import { format } from "date-fns";
 import { db } from "@/db";
+import { listRecurringDueDates } from "@/lib/recurring-expense-occurrences";
 import { createClient } from "@/lib/supabase/server";
 
 export type CalendarEventType = "charge" | "reminder" | "expense" | "recurring";
@@ -111,38 +112,29 @@ export async function getCalendarEvents(from: string, to: string): Promise<Calen
       andOperator(eqOperator(item.userId, userId), eqOperator(item.active, true)),
   });
 
-  const fromDate = parseISO(from);
-  const toDate = parseISO(to);
-
   for (const recurring of recurringRows) {
-    const start = parseISO(recurring.startDate);
-    const end = recurring.endDate ? parseISO(recurring.endDate) : null;
-    let cursor = start;
+    const dueDates = listRecurringDueDates(
+      {
+        active: recurring.active,
+        mode: recurring.mode,
+        frequency: recurring.frequency,
+        startDate: recurring.startDate,
+        endDate: recurring.endDate,
+        payableDayOfMonth: recurring.payableDayOfMonth,
+      },
+      { from, to }
+    );
 
-    while (!isAfter(cursor, toDate)) {
-      if (!isBefore(cursor, fromDate) && (end === null || !isAfter(cursor, end))) {
-        events.push({
-          id: `recurring-${recurring.id}-${format(cursor, "yyyy-MM-dd")}`,
-          date: format(cursor, "yyyy-MM-dd"),
-          type: "recurring",
-          title: recurring.description,
-          amount: parseFloat(recurring.amount),
-          color: COLOR_MAP.recurring,
-          href: `/gastos/recurrentes/${recurring.id}/editar`,
-        });
-      }
-
-      switch (recurring.frequency) {
-        case "monthly":
-          cursor = addMonths(cursor, 1);
-          break;
-        case "quarterly":
-          cursor = addQuarters(cursor, 1);
-          break;
-        case "yearly":
-          cursor = addYears(cursor, 1);
-          break;
-      }
+    for (const dueDate of dueDates) {
+      events.push({
+        id: `recurring-${recurring.id}-${dueDate}`,
+        date: dueDate,
+        type: "recurring",
+        title: recurring.description,
+        amount: parseFloat(recurring.amount),
+        color: COLOR_MAP.recurring,
+        href: `/gastos/recurrentes/${recurring.id}/editar`,
+      });
     }
   }
 
