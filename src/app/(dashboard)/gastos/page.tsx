@@ -193,15 +193,6 @@ export default async function GastosPage({ searchParams }: GastosPageProps) {
         </div>
       </SectionCard>
 
-      <RecurringPayablesChecklist
-        pending={recurringChecklist.pending}
-        paid={recurringChecklist.paid}
-        onMarkPaid={handleMarkPaid}
-        onReopen={handleReopen}
-      />
-
-      <AutomaticRecurringOverview items={automaticRecurringOverview} />
-
       <SectionCard
         eyebrow="Vista operativa"
         title="Historial de gastos"
@@ -309,6 +300,15 @@ export default async function GastosPage({ searchParams }: GastosPageProps) {
           </div>
         )}
       </SectionCard>
+
+      <RecurringPayablesChecklist
+        pending={recurringChecklist.pending}
+        paid={recurringChecklist.paid}
+        onMarkPaid={handleMarkPaid}
+        onReopen={handleReopen}
+      />
+
+      <AutomaticRecurringOverview items={automaticRecurringOverview} />
     </div>
   );
 }
