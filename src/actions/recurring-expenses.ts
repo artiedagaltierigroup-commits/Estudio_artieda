@@ -2,10 +2,10 @@
 
 import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-import { format } from "date-fns";
 import { z } from "zod";
 import { db } from "@/db";
 import { recurringExpenses } from "@/db/schema";
+import { resolveExistingRecurringStartDate } from "@/lib/recurring-expense-normalizers";
 import { calculateMonthlyProjection } from "@/lib/recurring-expense-projection";
 import { createClient } from "@/lib/supabase/server";
 import { syncRecurringExpenseOccurrences } from "./recurring-expense-occurrences";
@@ -62,7 +62,7 @@ function normalizeOptionalText(value?: string) {
   return trimmed ? trimmed : null;
 }
 
-function toRecurringValues(data: z.infer<typeof RecurringExpenseSchema>) {
+function toRecurringValues(data: z.infer<typeof RecurringExpenseSchema>, startDate: string) {
   const mode = data.mode;
   return {
     description: data.description.trim(),
@@ -72,7 +72,7 @@ function toRecurringValues(data: z.infer<typeof RecurringExpenseSchema>) {
     priority: data.priority,
     category: normalizeOptionalText(data.category),
     frequency: data.frequency,
-    startDate: mode === "PAYABLE" ? format(new Date(), "yyyy-MM-dd") : data.startDate!.trim(),
+    startDate,
     endDate: mode === "PAYABLE" ? null : normalizeOptionalText(data.endDate),
     notifyDaysBefore: mode === "PAYABLE" ? Number(data.notifyDaysBefore ?? "0") : 0,
     payableDayOfMonth: mode === "PAYABLE" ? Number(data.payableDayOfMonth ?? "1") : null,
@@ -115,7 +115,11 @@ export async function createRecurringExpense(formData: FormData) {
   const parsed = RecurringExpenseSchema.safeParse(raw);
   if (!parsed.success) return { error: parsed.error.errors[0].message };
 
-  const [inserted] = await db.insert(recurringExpenses).values({ ...toRecurringValues(parsed.data), userId }).returning();
+  const startDate = resolveExistingRecurringStartDate(null, parsed.data.mode, parsed.data.startDate, new Date());
+  const [inserted] = await db
+    .insert(recurringExpenses)
+    .values({ ...toRecurringValues(parsed.data, startDate), userId })
+    .returning();
 
   revalidatePath("/gastos/recurrentes");
   revalidatePath("/");
@@ -135,13 +139,12 @@ export async function updateRecurringExpense(id: string, formData: FormData) {
   });
   if (!existing) return { error: "Gasto recurrente no encontrado" };
 
+  const startDate = resolveExistingRecurringStartDate(existing, parsed.data.mode, parsed.data.startDate, new Date());
+
   await db
     .update(recurringExpenses)
     .set({
-      ...{
-        ...toRecurringValues(parsed.data),
-        startDate: parsed.data.mode === "PAYABLE" ? existing.startDate : toRecurringValues(parsed.data).startDate,
-      },
+      ...toRecurringValues(parsed.data, startDate),
       updatedAt: new Date(),
     })
     .where(and(eq(recurringExpenses.id, id), eq(recurringExpenses.userId, userId)));
