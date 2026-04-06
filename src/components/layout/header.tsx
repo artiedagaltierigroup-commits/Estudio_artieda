@@ -2,9 +2,10 @@
 
 import { createClient } from "@/lib/supabase/client";
 import { usePathname, useRouter } from "next/navigation";
-import { LogOut, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { Eye, EyeOff, LogOut, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { toast } from "sonner";
 import { getRouteMeta } from "@/lib/app-shell";
+import { useMoneyVisibility } from "@/components/system/money-visibility-provider";
 
 interface HeaderProps {
   email?: string;
@@ -17,6 +18,7 @@ export function Header({ email, sidebarCollapsed, onToggleSidebar }: HeaderProps
   const pathname = usePathname();
   const supabase = createClient();
   const routeMeta = getRouteMeta(pathname);
+  const { isMoneyHidden, toggleMoneyVisibility } = useMoneyVisibility();
 
   async function handleLogout() {
     await supabase.auth.signOut();
@@ -40,6 +42,17 @@ export function Header({ email, sidebarCollapsed, onToggleSidebar }: HeaderProps
       </div>
       <div className="flex items-center gap-4">
         {email && <span className="hidden text-sm text-muted-foreground sm:block">{email}</span>}
+        <button
+          type="button"
+          onClick={toggleMoneyVisibility}
+          aria-label={isMoneyHidden ? "Mostrar montos" : "Ocultar montos"}
+          aria-pressed={isMoneyHidden}
+          className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-border bg-background text-muted-foreground transition-colors hover:text-foreground"
+          suppressHydrationWarning
+          title={isMoneyHidden ? "Mostrar montos" : "Ocultar montos"}
+        >
+          {isMoneyHidden ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+        </button>
         <button
           onClick={handleLogout}
           className="flex items-center gap-2 rounded-full border border-border bg-background px-4 py-2 text-sm text-muted-foreground transition-colors hover:text-foreground"

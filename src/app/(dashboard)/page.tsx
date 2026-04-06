@@ -7,13 +7,14 @@ import {
 import { RecurringPayablesChecklist } from "@/components/dashboard/recurring-payables-checklist";
 import { DashboardCharts } from "@/components/dashboard/dashboard-charts";
 import { MetricCard } from "@/components/system/metric-card";
+import { MoneyAmount } from "@/components/system/money-amount";
 import { PageHeader } from "@/components/system/page-header";
 import { SectionCard } from "@/components/system/section-card";
 import { StatusChip } from "@/components/system/status-chip";
 import { Button } from "@/components/ui/button";
 import { getReminderPriorityTone } from "@/lib/module-presenters";
 import { getChargeStatusTone } from "@/lib/presentation";
-import { formatCurrency, formatDate, formatDateTime, getChargeStatusLabel } from "@/lib/utils";
+import { formatDate, formatDateTime, getChargeStatusLabel } from "@/lib/utils";
 import { endOfMonth, format, startOfMonth } from "date-fns";
 import { es } from "date-fns/locale";
 import {
@@ -66,35 +67,35 @@ export default async function DashboardPage() {
   const cards = [
     {
       label: "Ingresos esperados",
-      value: formatCurrency(metrics.expectedIncome),
+      value: <MoneyAmount value={metrics.expectedIncome} />,
       subtitle: "Cobros con vencimiento dentro del mes actual.",
       icon: Calendar,
       tone: "rose" as const,
     },
     {
       label: "Ingresos cobrados",
-      value: formatCurrency(metrics.collectedIncome),
+      value: <MoneyAmount value={metrics.collectedIncome} />,
       subtitle: "Entradas reales registradas durante este periodo.",
       icon: TrendingUp,
       tone: "sage" as const,
     },
     {
       label: "Pendiente de cobro",
-      value: formatCurrency(metrics.pendingIncome),
+      value: <MoneyAmount value={metrics.pendingIncome} />,
       subtitle: "Saldo vivo que sigue necesitando seguimiento.",
       icon: Clock,
       tone: "amber" as const,
     },
     {
       label: "Gastos del mes",
-      value: formatCurrency(metrics.periodExpenses + metrics.projectedRecurring),
+      value: <MoneyAmount value={metrics.periodExpenses + metrics.projectedRecurring} />,
       subtitle: "Gastos reales mas proyeccion recurrente.",
       icon: TrendingDown,
       tone: "danger" as const,
     },
     {
       label: "Resultado neto",
-      value: formatCurrency(metrics.netResult),
+      value: <MoneyAmount value={metrics.netResult} />,
       subtitle: "Cobrado real menos gasto real y fijo proyectado.",
       icon: Wallet,
       tone: metrics.netResult >= 0 ? ("sage" as const) : ("danger" as const),
@@ -115,7 +116,7 @@ export default async function DashboardPage() {
     },
     {
       label: "Ganancia neta total",
-      value: formatCurrency(metrics.netIncome),
+      value: <MoneyAmount value={metrics.netIncome} />,
       subtitle: "Todo lo cobrado menos egresos reales historicos.",
       icon: DollarSign,
       tone: metrics.netIncome >= 0 ? ("slate" as const) : ("danger" as const),
@@ -130,7 +131,7 @@ export default async function DashboardPage() {
           { label: "Periodo", value: periodLabel },
           { label: "Mejor mes", value: metrics.topMonth?.month ?? "Sin datos" },
           { label: "Cliente destacado", value: metrics.topClient?.name ?? "Sin datos" },
-          { label: "Proyeccion fija", value: formatCurrency(metrics.projectedRecurring) },
+          { label: "Proyeccion fija", value: <MoneyAmount value={metrics.projectedRecurring} /> },
         ]}
       />
 
@@ -219,7 +220,7 @@ export default async function DashboardPage() {
                       Vence: {formatDate(charge.dueDate)}
                     </span>
                     <span className="rounded-full border border-border/80 bg-background px-3 py-1">
-                      Saldo: {formatCurrency(charge.balance)}
+                      Saldo: <MoneyAmount value={charge.balance} />
                     </span>
                   </div>
                   <div>
@@ -248,10 +249,10 @@ export default async function DashboardPage() {
                   <p className="font-medium text-foreground">{client.clientName}</p>
                   <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
                     <span className="rounded-full border border-border/80 bg-background px-3 py-1">
-                      Cobrado: {formatCurrency(client.collected)}
+                      Cobrado: <MoneyAmount value={client.collected} />
                     </span>
                     <span className="rounded-full border border-border/80 bg-background px-3 py-1">
-                      Deuda: {formatCurrency(client.balance)}
+                      Deuda: <MoneyAmount value={client.balance} />
                     </span>
                   </div>
                 </li>
@@ -298,7 +299,7 @@ export default async function DashboardPage() {
               </div>
             </div>
             <p className="mt-4 text-2xl font-semibold tracking-[-0.03em] text-foreground">
-              {formatCurrency(metrics.pendingIncome)}
+              <MoneyAmount value={metrics.pendingIncome} />
             </p>
           </div>
 
@@ -308,7 +309,7 @@ export default async function DashboardPage() {
               Diferencia entre lo cobrado y lo que ya se fue en gastos.
             </p>
             <p className="mt-4 text-2xl font-semibold tracking-[-0.03em] text-foreground">
-              {formatCurrency(metrics.netResult)}
+              <MoneyAmount value={metrics.netResult} />
             </p>
           </div>
 
@@ -321,7 +322,9 @@ export default async function DashboardPage() {
               {metrics.topClient?.name ?? "Sin datos suficientes"}
             </p>
             {metrics.topClient ? (
-              <p className="mt-2 text-sm text-muted-foreground">{formatCurrency(metrics.topClient.total)} acumulados.</p>
+              <p className="mt-2 text-sm text-muted-foreground">
+                <MoneyAmount value={metrics.topClient.total} /> acumulados.
+              </p>
             ) : null}
           </div>
         </div>

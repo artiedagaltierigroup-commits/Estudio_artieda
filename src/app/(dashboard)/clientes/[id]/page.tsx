@@ -1,6 +1,7 @@
 import { getClient } from "@/actions/clients";
 import { EmptyState } from "@/components/system/empty-state";
 import { MetricCard } from "@/components/system/metric-card";
+import { MoneyAmount } from "@/components/system/money-amount";
 import { PageHeader } from "@/components/system/page-header";
 import { SectionCard } from "@/components/system/section-card";
 import { StatusChip } from "@/components/system/status-chip";
@@ -12,7 +13,6 @@ import {
 } from "@/lib/module-presenters";
 import { getCaseStatusTone, getChargeStatusTone, getNameInitials } from "@/lib/presentation";
 import {
-  formatCurrency,
   formatDate,
   formatDateTime,
   getCaseStatusLabel,
@@ -57,8 +57,8 @@ export default async function ClienteDetailPage({ params }: { params: Promise<{ 
         description="Vista central del vinculo profesional: datos base, casos asociados, deuda viva, cobros registrados y recordatorios pendientes."
         stats={[
           { label: "Casos", value: `${client.caseSummary.total}` },
-          { label: "Deuda", value: formatCurrency(client.financeSummary.balance) },
-          { label: "Cobrado", value: formatCurrency(client.financeSummary.collected) },
+          { label: "Deuda", value: <MoneyAmount value={client.financeSummary.balance} /> },
+          { label: "Cobrado", value: <MoneyAmount value={client.financeSummary.collected} /> },
           {
             label: "Ultimo movimiento",
             value: client.financeSummary.lastMovementAt
@@ -100,14 +100,14 @@ export default async function ClienteDetailPage({ params }: { params: Promise<{ 
         />
         <MetricCard
           label="Deuda actual"
-          value={formatCurrency(client.financeSummary.balance)}
+          value={<MoneyAmount value={client.financeSummary.balance} />}
           subtitle={`${client.financeSummary.overdue} cobro(s) vencido(s)`}
           icon={AlarmClockCheck}
           tone={client.financeSummary.overdue > 0 ? "danger" : "amber"}
         />
         <MetricCard
           label="Cobrado historico"
-          value={formatCurrency(client.financeSummary.collected)}
+          value={<MoneyAmount value={client.financeSummary.collected} />}
           subtitle={`${client.paymentTimeline.length} pago(s) registrados`}
           icon={HandCoins}
           tone="sage"
@@ -241,13 +241,13 @@ export default async function ClienteDetailPage({ params }: { params: Promise<{ 
                         <div className="rounded-[20px] border border-border/70 bg-white/80 px-4 py-3 text-sm">
                           <p className="text-[0.72rem] uppercase tracking-[0.14em] text-muted-foreground">Cobrado</p>
                           <p className="mt-1 font-semibold text-[#48745f]">
-                            {formatCurrency(currentCase.chargeSummary.collected)}
+                            <MoneyAmount value={currentCase.chargeSummary.collected} />
                           </p>
                         </div>
                         <div className="rounded-[20px] border border-border/70 bg-white/80 px-4 py-3 text-sm">
                           <p className="text-[0.72rem] uppercase tracking-[0.14em] text-muted-foreground">Saldo</p>
                           <p className="mt-1 font-semibold text-foreground">
-                            {formatCurrency(currentCase.chargeSummary.balance)}
+                            <MoneyAmount value={currentCase.chargeSummary.balance} />
                           </p>
                         </div>
                         <div className="rounded-[20px] border border-border/70 bg-white/80 px-4 py-3 text-sm">
@@ -292,7 +292,7 @@ export default async function ClienteDetailPage({ params }: { params: Promise<{ 
                       Vence: {formatDate(charge.dueDate)}
                     </span>
                     <span className="rounded-full border border-border/80 bg-background px-3 py-1">
-                      Saldo: {formatCurrency(charge.balance)}
+                      Saldo: <MoneyAmount value={charge.balance} />
                     </span>
                     {charge.followUpDate ? (
                       <span className="rounded-full border border-border/80 bg-background px-3 py-1">
@@ -337,7 +337,9 @@ export default async function ClienteDetailPage({ params }: { params: Promise<{ 
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className="font-semibold text-[#48745f]">{formatCurrency(payment.amount)}</p>
+                    <p className="font-semibold text-[#48745f]">
+                      <MoneyAmount value={payment.amount} />
+                    </p>
                     <p className="mt-1 text-xs text-muted-foreground">{formatDateTime(payment.createdAt)}</p>
                   </div>
                 </li>

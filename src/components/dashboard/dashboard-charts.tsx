@@ -1,5 +1,6 @@
 "use client";
 
+import { useMoneyVisibility } from "@/components/system/money-visibility-provider";
 import {
   Bar,
   BarChart,
@@ -10,7 +11,7 @@ import {
   YAxis,
 } from "recharts";
 import { SectionCard } from "@/components/system/section-card";
-import { formatCurrency } from "@/lib/utils";
+import { formatDisplayCurrency } from "@/lib/money-visibility";
 
 interface MonthlyNetData {
   month: string;
@@ -20,6 +21,7 @@ interface MonthlyNetData {
 }
 
 export function DashboardCharts({ monthlyNet }: { monthlyNet: MonthlyNetData[] }) {
+  const { isMoneyHidden } = useMoneyVisibility();
   const totalIncome = monthlyNet.reduce((sum, item) => sum + item.income, 0);
   const totalExpenses = monthlyNet.reduce((sum, item) => sum + item.expenses, 0);
   const bestNetMonth = monthlyNet.reduce<MonthlyNetData | null>(
@@ -30,18 +32,18 @@ export function DashboardCharts({ monthlyNet }: { monthlyNet: MonthlyNetData[] }
   const insights = [
     {
       label: "Ingreso 12 meses",
-      value: formatCurrency(totalIncome),
+      value: formatDisplayCurrency(totalIncome, isMoneyHidden),
       detail: "Cobrado real acumulado en la ventana analizada.",
     },
     {
       label: "Gasto 12 meses",
-      value: formatCurrency(totalExpenses),
+      value: formatDisplayCurrency(totalExpenses, isMoneyHidden),
       detail: "Egresos reales dentro de la misma ventana.",
     },
     {
       label: "Mejor neto",
       value: bestNetMonth ? bestNetMonth.month : "Sin datos",
-      detail: bestNetMonth ? formatCurrency(bestNetMonth.net) : "Todavia no hay movimientos.",
+      detail: bestNetMonth ? formatDisplayCurrency(bestNetMonth.net, isMoneyHidden) : "Todavia no hay movimientos.",
     },
   ];
 
@@ -69,7 +71,10 @@ export function DashboardCharts({ monthlyNet }: { monthlyNet: MonthlyNetData[] }
                 tickLine={false}
               />
               <Tooltip
-                formatter={(value: number, name: string) => [formatCurrency(value), name === "income" ? "Ingresos" : "Gastos"]}
+                formatter={(value: number, name: string) => [
+                  formatDisplayCurrency(value, isMoneyHidden),
+                  name === "income" ? "Ingresos" : "Gastos",
+                ]}
                 contentStyle={{
                   backgroundColor: "rgba(255, 255, 255, 0.98)",
                   border: "1px solid rgba(223, 208, 215, 0.85)",

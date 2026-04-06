@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 
 interface PageHeaderStat {
   label: string;
-  value: string;
+  value: ReactNode;
 }
 
 interface PageHeaderProps {

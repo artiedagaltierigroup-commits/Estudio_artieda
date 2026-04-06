@@ -1,11 +1,12 @@
 import { createRecurringExpense, getRecurringExpenses } from "@/actions/recurring-expenses";
 import { EmptyState } from "@/components/system/empty-state";
+import { MoneyAmount } from "@/components/system/money-amount";
 import { PageHeader } from "@/components/system/page-header";
 import { SectionCard } from "@/components/system/section-card";
 import { StatusChip } from "@/components/system/status-chip";
 import { Button } from "@/components/ui/button";
 import { RecurringExpenseForm } from "@/components/expenses/recurring-expense-form";
-import { formatCurrency, getExpenseTypeLabel, getFrequencyLabel, getPriorityLabel, getRecurringModeLabel } from "@/lib/utils";
+import { getExpenseTypeLabel, getFrequencyLabel, getPriorityLabel, getRecurringModeLabel } from "@/lib/utils";
 import { ArrowLeft, RefreshCcw } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -99,7 +100,9 @@ export default async function GastosRecurrentesPage() {
               </div>
               <div className="flex items-center gap-4">
                 <div className="text-right">
-                  <p className="text-lg font-semibold text-foreground">{formatCurrency(item.amount)}</p>
+                  <p className="text-lg font-semibold text-foreground">
+                    <MoneyAmount value={item.amount} />
+                  </p>
                   {item.endDate ? <p className="text-xs text-muted-foreground">Hasta {item.endDate}</p> : null}
                 </div>
                 <Button asChild variant="ghost" size="sm">

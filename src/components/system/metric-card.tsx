@@ -3,10 +3,11 @@ import { InfoPopover } from "@/components/system/info-popover";
 import { getToneStyles, type VisualTone } from "@/lib/presentation";
 import { cn } from "@/lib/utils";
 import type { LucideIcon } from "lucide-react";
+import type { ReactNode } from "react";
 
 interface MetricCardProps {
   label: string;
-  value: string;
+  value: ReactNode;
   subtitle?: string;
   hint?: string;
   icon: LucideIcon;

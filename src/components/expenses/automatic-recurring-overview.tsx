@@ -1,7 +1,8 @@
+import { MoneyAmount } from "@/components/system/money-amount";
 import { SectionCard } from "@/components/system/section-card";
 import { StatusChip } from "@/components/system/status-chip";
 import type { AutomaticRecurringOverviewItem } from "@/lib/automatic-recurring-overview";
-import { formatCurrency, formatDate, getExpenseTypeLabel, getFrequencyLabel } from "@/lib/utils";
+import { formatDate, getExpenseTypeLabel, getFrequencyLabel } from "@/lib/utils";
 
 interface AutomaticRecurringOverviewProps {
   items: AutomaticRecurringOverviewItem[];
@@ -53,7 +54,9 @@ export function AutomaticRecurringOverview({ items }: AutomaticRecurringOverview
                 </div>
 
                 <div className="text-right">
-                  <p className="text-lg font-semibold text-foreground">{formatCurrency(item.amount)}</p>
+                  <p className="text-lg font-semibold text-foreground">
+                    <MoneyAmount value={item.amount} />
+                  </p>
                   <p className="text-xs text-muted-foreground">{getNextImpactLabel(item.daysUntilNextDue)}</p>
                 </div>
               </div>

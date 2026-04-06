@@ -12,6 +12,7 @@ import {
 } from "@/actions/recurring-expense-occurrences";
 import { EmptyState } from "@/components/system/empty-state";
 import { MetricCard } from "@/components/system/metric-card";
+import { MoneyAmount } from "@/components/system/money-amount";
 import { PageHeader } from "@/components/system/page-header";
 import { SectionCard } from "@/components/system/section-card";
 import { StatusChip } from "@/components/system/status-chip";
@@ -21,7 +22,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { getReminderPriorityTone } from "@/lib/module-presenters";
 import { sortRemindersForPanel, summarizeReminderPanel } from "@/lib/operations-insights";
-import { formatCurrency, formatDate, formatDateTime, getPriorityLabel } from "@/lib/utils";
+import { formatDate, formatDateTime, getPriorityLabel } from "@/lib/utils";
 import { Bell, CalendarCheck2, CheckCircle2, Clock3, Plus, RotateCcw, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -336,7 +337,7 @@ export default async function RecordatoriosPage() {
                       Vence {formatDate(item.reminderDate.toISOString().slice(0, 10))}
                     </span>
                     <span className="rounded-full border border-border/80 bg-background px-3 py-1">
-                      {formatCurrency(item.amount)}
+                      <MoneyAmount value={item.amount} />
                     </span>
                   </div>
                 </div>

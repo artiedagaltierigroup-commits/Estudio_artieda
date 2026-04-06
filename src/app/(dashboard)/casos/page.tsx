@@ -2,6 +2,7 @@ import { getCases } from "@/actions/cases";
 import { getClients } from "@/actions/clients";
 import { EmptyState } from "@/components/system/empty-state";
 import { MetricCard } from "@/components/system/metric-card";
+import { MoneyAmount } from "@/components/system/money-amount";
 import { PageHeader } from "@/components/system/page-header";
 import { SectionCard } from "@/components/system/section-card";
 import { StatusChip } from "@/components/system/status-chip";
@@ -9,7 +10,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { getCaseStatusTone, getChargeStatusTone } from "@/lib/presentation";
 import {
-  formatCurrency,
   formatDate,
   getCaseStatusLabel,
   getChargeStatusLabel,
@@ -69,7 +69,7 @@ export default async function CasosPage({ searchParams }: CasosPageProps) {
           { label: "Visibles", value: `${caseList.length}` },
           { label: "Activos", value: `${activeCases}` },
           { label: "Con atraso", value: `${overdueCases}` },
-          { label: "Saldo abierto", value: formatCurrency(openBalance) },
+          { label: "Saldo abierto", value: <MoneyAmount value={openBalance} /> },
         ]}
         actions={
           <Button asChild>
@@ -84,21 +84,21 @@ export default async function CasosPage({ searchParams }: CasosPageProps) {
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard
           label="Honorarios pactados"
-          value={formatCurrency(totalFees)}
+          value={<MoneyAmount value={totalFees} />}
           subtitle="Monto base definido en los expedientes visibles."
           icon={WalletCards}
           tone="rose"
         />
         <MetricCard
           label="Cobrado"
-          value={formatCurrency(caseList.reduce((sum, item) => sum + item.financeSummary.collected, 0))}
+          value={<MoneyAmount value={caseList.reduce((sum, item) => sum + item.financeSummary.collected, 0)} />}
           subtitle="Pagos ya registrados sobre esos casos."
           icon={Coins}
           tone="sage"
         />
         <MetricCard
           label="Saldo pendiente"
-          value={formatCurrency(openBalance)}
+          value={<MoneyAmount value={openBalance} />}
           subtitle="Deuda viva todavia no recuperada."
           icon={Briefcase}
           tone="amber"
@@ -238,13 +238,13 @@ export default async function CasosPage({ searchParams }: CasosPageProps) {
                       </div>
                     </td>
                     <td className="px-4 py-4 text-right font-medium text-foreground">
-                      {item.fee ? formatCurrency(item.fee) : "Sin definir"}
+                      {item.fee ? <MoneyAmount value={item.fee} /> : "Sin definir"}
                     </td>
                     <td className="px-4 py-4 text-right font-medium text-[#48745f]">
-                      {formatCurrency(item.financeSummary.collected)}
+                      <MoneyAmount value={item.financeSummary.collected} />
                     </td>
                     <td className="px-4 py-4 text-right font-semibold text-foreground">
-                      {formatCurrency(item.pendingBalance)}
+                      <MoneyAmount value={item.pendingBalance} />
                     </td>
                     <td className="px-4 py-4 text-xs text-muted-foreground">
                       {item.latestDueDate ? formatDate(item.latestDueDate) : "Sin vencimientos"}

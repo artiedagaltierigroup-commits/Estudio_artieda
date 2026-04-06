@@ -1,11 +1,12 @@
 import { getExpense, voidExpense } from "@/actions/expenses";
+import { MoneyAmount } from "@/components/system/money-amount";
 import { PageHeader } from "@/components/system/page-header";
 import { SectionCard } from "@/components/system/section-card";
 import { StatusChip } from "@/components/system/status-chip";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { formatCurrency, formatDate, formatDateTime, getExpenseTypeLabel } from "@/lib/utils";
+import { formatDate, formatDateTime, getExpenseTypeLabel } from "@/lib/utils";
 import { ArrowLeft, PencilLine, XCircle } from "lucide-react";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
@@ -30,7 +31,7 @@ export default async function GastoDetailPage({ params }: { params: Promise<{ id
         title={expense.description}
         description="Detalle del egreso real con datos de imputacion, comprobante y anulación lógica."
         stats={[
-          { label: "Monto", value: formatCurrency(expense.amount) },
+          { label: "Monto", value: <MoneyAmount value={expense.amount} /> },
           { label: "Fecha", value: formatDate(expense.date) },
           { label: "Tipo", value: getExpenseTypeLabel(expense.type) },
           { label: "Estado", value: isVoided ? "Anulado" : "Activo" },

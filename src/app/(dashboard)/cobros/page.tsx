@@ -1,13 +1,14 @@
 import { getCharges } from "@/actions/charges";
 import { EmptyState } from "@/components/system/empty-state";
 import { MetricCard } from "@/components/system/metric-card";
+import { MoneyAmount } from "@/components/system/money-amount";
 import { PageHeader } from "@/components/system/page-header";
 import { SectionCard } from "@/components/system/section-card";
 import { StatusChip } from "@/components/system/status-chip";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { getChargeStatusTone } from "@/lib/presentation";
-import { formatCurrency, formatDate, getChargeStatusLabel } from "@/lib/utils";
+import { formatDate, getChargeStatusLabel } from "@/lib/utils";
 import {
   AlarmClockCheck,
   Clock3,
@@ -70,7 +71,7 @@ export default async function CobrosPage({ searchParams }: CobrosPageProps) {
         description="Bandeja de compromisos de cobro con lectura de saldo, vencimiento, pagos aplicados y acceso directo a operar cada uno."
         stats={[
           { label: "Visibles", value: `${charges.length}` },
-          { label: "Saldo vivo", value: formatCurrency(totals.balance) },
+          { label: "Saldo vivo", value: <MoneyAmount value={totals.balance} /> },
           { label: "Parciales", value: `${totals.PARTIAL}` },
           { label: "Vencidos", value: `${totals.OVERDUE}` },
         ]}
@@ -87,14 +88,14 @@ export default async function CobrosPage({ searchParams }: CobrosPageProps) {
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard
           label="Cobrado"
-          value={formatCurrency(totals.paid)}
+          value={<MoneyAmount value={totals.paid} />}
           subtitle="Pagos ya registrados sobre el total pactado."
           icon={HandCoins}
           tone="sage"
         />
         <MetricCard
           label="Programados"
-          value={formatCurrency(totals.total)}
+          value={<MoneyAmount value={totals.total} />}
           subtitle="Monto comprometido entre todos los cobros visibles."
           icon={Coins}
           tone="lilac"
@@ -108,7 +109,7 @@ export default async function CobrosPage({ searchParams }: CobrosPageProps) {
         />
         <MetricCard
           label="Pendiente"
-          value={formatCurrency(totals.balance)}
+          value={<MoneyAmount value={totals.balance} />}
           subtitle="Saldo que todavia falta recuperar."
           icon={Clock3}
           tone="amber"
@@ -215,13 +216,13 @@ export default async function CobrosPage({ searchParams }: CobrosPageProps) {
                       <p className="mt-1">{charge.case?.title ?? "Sin caso asociado"}</p>
                     </td>
                     <td className="px-6 py-4 text-right font-medium text-foreground">
-                      {formatCurrency(charge.amountTotal)}
+                      <MoneyAmount value={charge.amountTotal} />
                     </td>
                     <td className="px-6 py-4 text-right font-medium text-[#48745f]">
-                      {formatCurrency(charge.amountPaid)}
+                      <MoneyAmount value={charge.amountPaid} />
                     </td>
                     <td className="px-6 py-4 text-right font-semibold text-foreground">
-                      {formatCurrency(charge.balance)}
+                      <MoneyAmount value={charge.balance} />
                     </td>
                     <td className="px-6 py-4 text-muted-foreground">{formatDate(charge.dueDate)}</td>
                     <td className="px-6 py-4">

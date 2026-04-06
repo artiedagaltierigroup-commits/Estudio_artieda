@@ -10,13 +10,14 @@ import { RecurringPayablesChecklist } from "@/components/dashboard/recurring-pay
 import { AutomaticRecurringOverview } from "@/components/expenses/automatic-recurring-overview";
 import { EmptyState } from "@/components/system/empty-state";
 import { MetricCard } from "@/components/system/metric-card";
+import { MoneyAmount } from "@/components/system/money-amount";
 import { PageHeader } from "@/components/system/page-header";
 import { SectionCard } from "@/components/system/section-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { buildAutomaticRecurringOverview } from "@/lib/automatic-recurring-overview";
 import { buildExpenseMonthBoard, summarizeExpenseMetrics } from "@/lib/expense-insights";
-import { formatCurrency, formatDate, getExpenseOriginLabel, getExpenseTypeLabel } from "@/lib/utils";
+import { formatDate, getExpenseOriginLabel, getExpenseTypeLabel } from "@/lib/utils";
 import { Plus, Receipt, RefreshCcw, Search, Wallet } from "lucide-react";
 import { endOfMonth, format, startOfMonth } from "date-fns";
 import Link from "next/link";
@@ -94,7 +95,7 @@ export default async function GastosPage({ searchParams }: GastosPageProps) {
         stats={[
           { label: "Registros", value: `${expenseList.length}` },
           { label: "Operativos", value: `${metrics.operativeCount}` },
-          { label: "Total cargado", value: formatCurrency(metrics.totalExpenses) },
+          { label: "Total cargado", value: <MoneyAmount value={metrics.totalExpenses} /> },
           { label: "Recurrentes activos", value: `${metrics.activeRecurringCount}` },
         ]}
         actions={
@@ -127,18 +128,18 @@ export default async function GastosPage({ searchParams }: GastosPageProps) {
                 Dinero realmente disponible
               </p>
               <p className={`text-4xl font-semibold tracking-tight ${realTone}`}>
-                {formatCurrency(monthBoard.realAvailable)}
+                <MoneyAmount value={monthBoard.realAvailable} />
               </p>
               <p className="text-sm text-muted-foreground">
-                Cobrado este mes {formatCurrency(monthOverview.metrics.collectedIncome)} menos gastos del mes{" "}
-                {formatCurrency(monthOverview.metrics.periodExpenses)}.
+                Cobrado este mes <MoneyAmount value={monthOverview.metrics.collectedIncome} /> menos gastos del mes{" "}
+                <MoneyAmount value={monthOverview.metrics.periodExpenses} />.
               </p>
             </div>
 
             <div className="space-y-3 rounded-[24px] border border-border/70 bg-white/90 p-4">
               <div className="flex items-center justify-between text-sm text-muted-foreground">
                 <span>Cobrado real</span>
-                <span>{formatCurrency(monthOverview.metrics.collectedIncome)}</span>
+                <span><MoneyAmount value={monthOverview.metrics.collectedIncome} /></span>
               </div>
               <div className="h-3 overflow-hidden rounded-full bg-emerald-100/80">
                 <div
@@ -149,7 +150,7 @@ export default async function GastosPage({ searchParams }: GastosPageProps) {
 
               <div className="flex items-center justify-between text-sm text-muted-foreground">
                 <span>Gastado este mes</span>
-                <span>{formatCurrency(monthOverview.metrics.periodExpenses)}</span>
+                <span><MoneyAmount value={monthOverview.metrics.periodExpenses} /></span>
               </div>
               <div className="h-3 overflow-hidden rounded-full bg-rose-100/80">
                 <div
@@ -163,14 +164,14 @@ export default async function GastosPage({ searchParams }: GastosPageProps) {
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
             <MetricCard
               label="Se va a cobrar"
-              value={formatCurrency(monthOverview.metrics.expectedIncome)}
+              value={<MoneyAmount value={monthOverview.metrics.expectedIncome} />}
               subtitle={`Total comprometido con vencimiento dentro de ${monthLabel}.`}
               icon={Wallet}
               tone="sage"
             />
             <MetricCard
               label="Falta por cobrar"
-              value={formatCurrency(monthBoard.pendingToCollect)}
+              value={<MoneyAmount value={monthBoard.pendingToCollect} />}
               subtitle="Lo que todavia no entro, sin descontar gastos."
               icon={Receipt}
               tone="amber"
@@ -184,7 +185,7 @@ export default async function GastosPage({ searchParams }: GastosPageProps) {
             />
             <MetricCard
               label="Gastado este mes"
-              value={formatCurrency(monthOverview.metrics.periodExpenses)}
+              value={<MoneyAmount value={monthOverview.metrics.periodExpenses} />}
               subtitle="Egresos reales registrados en este mes."
               icon={RefreshCcw}
               tone="rose"
@@ -286,7 +287,7 @@ export default async function GastosPage({ searchParams }: GastosPageProps) {
                     <td className="px-6 py-4 text-muted-foreground">{formatDate(item.date)}</td>
                     <td className="px-6 py-4 text-muted-foreground">{item.category ?? "Sin categoria"}</td>
                     <td className="px-6 py-4 text-right font-semibold text-[#9d4d4d]">
-                      {formatCurrency(item.amount)}
+                      <MoneyAmount value={item.amount} />
                     </td>
                     <td className="px-6 py-4 text-right">
                       <Button asChild variant="ghost" size="sm">

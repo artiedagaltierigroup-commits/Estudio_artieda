@@ -1,6 +1,7 @@
 import { getClients } from "@/actions/clients";
 import { EmptyState } from "@/components/system/empty-state";
 import { MetricCard } from "@/components/system/metric-card";
+import { MoneyAmount } from "@/components/system/money-amount";
 import { PageHeader } from "@/components/system/page-header";
 import { SectionCard } from "@/components/system/section-card";
 import { StatusChip } from "@/components/system/status-chip";
@@ -11,7 +12,7 @@ import {
   getClientPortfolioStatusTone,
 } from "@/lib/module-presenters";
 import { getNameInitials } from "@/lib/presentation";
-import { formatCurrency, formatDateTime } from "@/lib/utils";
+import { formatDateTime } from "@/lib/utils";
 import { Briefcase, ChevronRight, Coins, Plus, Search, Users } from "lucide-react";
 import Link from "next/link";
 
@@ -41,7 +42,7 @@ export default async function ClientesPage({ searchParams }: ClientesPageProps) 
           { label: "Total", value: `${clientList.length} visibles` },
           { label: "Con deuda vencida", value: `${overdueClients}` },
           { label: "Activos", value: `${activeClients}` },
-          { label: "Saldo abierto", value: formatCurrency(openBalance) },
+          { label: "Saldo abierto", value: <MoneyAmount value={openBalance} /> },
         ]}
         actions={
           <Button asChild>
@@ -56,14 +57,14 @@ export default async function ClientesPage({ searchParams }: ClientesPageProps) 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard
           label="Cobrado historico"
-          value={formatCurrency(totalCollected)}
+          value={<MoneyAmount value={totalCollected} />}
           subtitle="Pagos registrados entre todos los clientes."
           icon={Coins}
           tone="sage"
         />
         <MetricCard
           label="Deuda pendiente"
-          value={formatCurrency(openBalance)}
+          value={<MoneyAmount value={openBalance} />}
           subtitle="Saldo vivo todavia no cobrado."
           icon={Users}
           tone="amber"
@@ -196,10 +197,10 @@ export default async function ClientesPage({ searchParams }: ClientesPageProps) 
                       </div>
                     </td>
                     <td className="px-4 py-4 text-right font-medium text-[#48745f]">
-                      {formatCurrency(client.financeSummary.collected)}
+                      <MoneyAmount value={client.financeSummary.collected} />
                     </td>
                     <td className="px-4 py-4 text-right font-semibold text-foreground">
-                      {formatCurrency(client.financeSummary.balance)}
+                      <MoneyAmount value={client.financeSummary.balance} />
                     </td>
                     <td className="px-4 py-4 text-right text-muted-foreground">
                       <span className="font-medium text-foreground">{client.caseSummary.total}</span>

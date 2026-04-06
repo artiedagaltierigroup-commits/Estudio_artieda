@@ -1,11 +1,12 @@
 import { differenceInCalendarDays, formatDistanceToNowStrict, parseISO } from "date-fns";
 import { es } from "date-fns/locale";
+import { MoneyAmount } from "@/components/system/money-amount";
 import { SectionCard } from "@/components/system/section-card";
 import { StatusChip } from "@/components/system/status-chip";
 import { Button } from "@/components/ui/button";
 import { getReminderPriorityTone } from "@/lib/module-presenters";
 import { getReminderWindowStart } from "@/lib/recurring-expense-occurrences";
-import { formatCurrency, formatDate, getPriorityLabel } from "@/lib/utils";
+import { formatDate, getPriorityLabel } from "@/lib/utils";
 import { CheckCircle2, Circle, RotateCcw } from "lucide-react";
 import Link from "next/link";
 
@@ -85,7 +86,9 @@ function ChecklistCard({
           </div>
 
           <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-            <span className="rounded-full border border-border/80 bg-background px-3 py-1">{formatCurrency(item.amount)}</span>
+            <span className="rounded-full border border-border/80 bg-background px-3 py-1">
+              <MoneyAmount value={item.amount} />
+            </span>
             <span className="rounded-full border border-border/80 bg-background px-3 py-1">
               Avisa {item.notifyDaysBefore} dia(s) antes
             </span>

@@ -1,6 +1,7 @@
 import { getCase } from "@/actions/cases";
 import { EmptyState } from "@/components/system/empty-state";
 import { MetricCard } from "@/components/system/metric-card";
+import { MoneyAmount } from "@/components/system/money-amount";
 import { PageHeader } from "@/components/system/page-header";
 import { SectionCard } from "@/components/system/section-card";
 import { StatusChip } from "@/components/system/status-chip";
@@ -9,7 +10,6 @@ import { getCasePendingBalance } from "@/lib/case-insights";
 import { getReminderPriorityTone } from "@/lib/module-presenters";
 import { getCaseStatusTone, getChargeStatusTone } from "@/lib/presentation";
 import {
-  formatCurrency,
   formatDate,
   formatDateTime,
   getCaseStatusLabel,
@@ -60,9 +60,9 @@ export default async function CaseDetailPage({ params }: { params: Promise<{ id:
         title={caseData.title}
         description={`Cliente asociado: ${caseData.client?.name ?? "Sin cliente"}. Esta ficha ya centraliza contexto, cobros, pagos y recordatorios vinculados.`}
         stats={[
-          { label: "Honorarios", value: caseData.fee ? formatCurrency(caseData.fee) : "Sin definir" },
-          { label: "Cobrado", value: formatCurrency(caseData.financeSummary.collected) },
-          { label: "Saldo pendiente", value: formatCurrency(pendingBalance) },
+          { label: "Honorarios", value: caseData.fee ? <MoneyAmount value={caseData.fee} /> : "Sin definir" },
+          { label: "Cobrado", value: <MoneyAmount value={caseData.financeSummary.collected} /> },
+          { label: "Saldo pendiente", value: <MoneyAmount value={pendingBalance} /> },
           {
             label: caseData.financeSummary.overdue > 0 ? "Vencidos" : "Proximo vencimiento",
             value:
@@ -200,13 +200,13 @@ export default async function CaseDetailPage({ params }: { params: Promise<{ id:
 
                     <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
                       <span className="rounded-full border border-border/80 bg-background px-3 py-1">
-                        Total: {formatCurrency(charge.amountTotal)}
+                        Total: <MoneyAmount value={charge.amountTotal} />
                       </span>
                       <span className="rounded-full border border-border/80 bg-background px-3 py-1">
-                        Cobrado: {formatCurrency(charge.amountPaid)}
+                        Cobrado: <MoneyAmount value={charge.amountPaid} />
                       </span>
                       <span className="rounded-full border border-border/80 bg-background px-3 py-1">
-                        Saldo: {formatCurrency(charge.balance)}
+                        Saldo: <MoneyAmount value={charge.balance} />
                       </span>
                       <span className="rounded-full border border-border/80 bg-background px-3 py-1">
                         Vence: {formatDate(charge.dueDate)}
@@ -239,7 +239,9 @@ export default async function CaseDetailPage({ params }: { params: Promise<{ id:
                           <p className="text-xs text-muted-foreground">{formatDate(payment.paymentDate)}</p>
                         </div>
                         <div className="text-right">
-                          <p className="text-sm font-semibold text-[#48745f]">{formatCurrency(payment.amount)}</p>
+                          <p className="text-sm font-semibold text-[#48745f]">
+                            <MoneyAmount value={payment.amount} />
+                          </p>
                           {payment.notes ? <p className="text-xs text-muted-foreground">{payment.notes}</p> : null}
                         </div>
                       </div>
@@ -281,7 +283,9 @@ export default async function CaseDetailPage({ params }: { params: Promise<{ id:
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className="font-semibold text-[#48745f]">{formatCurrency(payment.amount)}</p>
+                    <p className="font-semibold text-[#48745f]">
+                      <MoneyAmount value={payment.amount} />
+                    </p>
                     <p className="mt-1 text-xs text-muted-foreground">{formatDateTime(payment.createdAt)}</p>
                   </div>
                 </li>

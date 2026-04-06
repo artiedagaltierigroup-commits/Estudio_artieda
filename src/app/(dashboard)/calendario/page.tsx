@@ -1,12 +1,12 @@
 import { getCalendarEvents } from "@/actions/calendar";
 import { EmptyState } from "@/components/system/empty-state";
+import { MoneyAmount } from "@/components/system/money-amount";
 import { PageHeader } from "@/components/system/page-header";
 import { SectionCard } from "@/components/system/section-card";
 import { StatusChip } from "@/components/system/status-chip";
 import { Button } from "@/components/ui/button";
 import { getCalendarEventLabel, getCalendarEventTone } from "@/lib/module-presenters";
 import { buildCalendarMonth } from "@/lib/operations-insights";
-import { formatCurrency } from "@/lib/utils";
 import { addMonths, endOfMonth, format, parse, startOfMonth } from "date-fns";
 import { es } from "date-fns/locale";
 import { CalendarClock, ChevronLeft, ChevronRight } from "lucide-react";
@@ -146,7 +146,9 @@ export default async function CalendarioPage({
                               />
                             </div>
                             {event.amount !== undefined ? (
-                              <p className="mt-1 text-[0.72rem] font-semibold text-[#9a4e69]">{formatCurrency(event.amount)}</p>
+                              <p className="mt-1 text-[0.72rem] font-semibold text-[#9a4e69]">
+                                <MoneyAmount value={event.amount} />
+                              </p>
                             ) : null}
                           </Link>
                         ))}
@@ -186,7 +188,9 @@ export default async function CalendarioPage({
                   <StatusChip label={getCalendarEventLabel(event.type)} tone={getCalendarEventTone(event.type)} />
                 </div>
                 {event.amount !== undefined ? (
-                  <p className="mt-2 text-sm font-semibold text-[#9a4e69]">{formatCurrency(event.amount)}</p>
+                  <p className="mt-2 text-sm font-semibold text-[#9a4e69]">
+                    <MoneyAmount value={event.amount} />
+                  </p>
                 ) : null}
               </Link>
             ))}

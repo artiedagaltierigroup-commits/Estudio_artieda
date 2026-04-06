@@ -1,8 +1,9 @@
 "use client";
 
 import { SectionCard } from "@/components/system/section-card";
+import { useMoneyVisibility } from "@/components/system/money-visibility-provider";
+import { formatDisplayCurrency } from "@/lib/money-visibility";
 import { formatStatisticsAxisValue, getHorizontalBarChartHeight } from "@/lib/statistics-presentation";
-import { formatCurrency } from "@/lib/utils";
 import { useId } from "react";
 import {
   Area,
@@ -121,6 +122,7 @@ export function StatisticsTrendChartCard({
   emptyMessage,
   className,
 }: StatisticsTrendChartCardProps) {
+  const { isMoneyHidden } = useMoneyVisibility();
   const chartId = useId().replace(/:/g, "");
   const showDots = data.length <= 12;
 
@@ -147,7 +149,10 @@ export function StatisticsTrendChartCard({
               axisLine={false}
               tickLine={false}
             />
-            <Tooltip formatter={(value: number, name: string) => [formatCurrency(value), name]} contentStyle={tooltipContentStyle} />
+            <Tooltip
+              formatter={(value: number, name: string) => [formatDisplayCurrency(value, isMoneyHidden), name]}
+              contentStyle={tooltipContentStyle}
+            />
             {series.length > 1 ? (
               <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{ paddingBottom: "12px", fontSize: "12px" }} />
             ) : null}
@@ -182,6 +187,7 @@ export function EstadisticasCharts({
   currentRangeLabel,
   previousRangeLabel,
 }: Props) {
+  const { isMoneyHidden } = useMoneyVisibility();
   const topClientsHeight = getHorizontalBarChartHeight(Math.min(topClients.length || 1, 6));
   const topCasesHeight = getHorizontalBarChartHeight(Math.min(topCases.length || 1, 6));
   const expensesHeight = getHorizontalBarChartHeight(Math.min(expensesByCategory.length || 1, 6));
@@ -210,7 +216,7 @@ export function EstadisticasCharts({
               <YAxis tickFormatter={formatStatisticsAxisValue} tick={{ fontSize: 11, fill: "#8A7C84" }} axisLine={false} tickLine={false} />
               <Tooltip
                 formatter={(value: number, key: string) => [
-                  formatCurrency(value),
+                  formatDisplayCurrency(value, isMoneyHidden),
                   key === "current" ? "Periodo actual" : "Periodo anterior",
                 ]}
                 contentStyle={tooltipContentStyle}
@@ -243,7 +249,10 @@ export function EstadisticasCharts({
                 axisLine={false}
                 tickLine={false}
               />
-              <Tooltip formatter={(value: number) => [formatCurrency(value), "Cobrado"]} contentStyle={tooltipContentStyle} />
+              <Tooltip
+                formatter={(value: number) => [formatDisplayCurrency(value, isMoneyHidden), "Cobrado"]}
+                contentStyle={tooltipContentStyle}
+              />
               <Bar dataKey="collected" fill="#7BBE9E" radius={[0, 12, 12, 0]} barSize={20} />
             </BarChart>
           </ResponsiveContainer>
@@ -272,7 +281,10 @@ export function EstadisticasCharts({
                 tickLine={false}
               />
               <Tooltip
-                formatter={(value: number, _name, item) => [formatCurrency(value), item.payload.caseTitle]}
+                formatter={(value: number, _name, item) => [
+                  formatDisplayCurrency(value, isMoneyHidden),
+                  item.payload.caseTitle,
+                ]}
                 labelFormatter={(_label, payload) => payload?.[0]?.payload.clientName ?? ""}
                 contentStyle={tooltipContentStyle}
               />
@@ -319,7 +331,7 @@ export function EstadisticasCharts({
               />
               <Tooltip
                 formatter={(value: number, _name, item) => [
-                  `${formatCurrency(value)} (${item.payload.percentage}%)`,
+                  `${formatDisplayCurrency(value, isMoneyHidden)} (${item.payload.percentage}%)`,
                   item.payload.name,
                 ]}
                 contentStyle={tooltipContentStyle}
@@ -346,7 +358,7 @@ export function EstadisticasCharts({
               <YAxis tickFormatter={formatStatisticsAxisValue} tick={{ fontSize: 11, fill: "#8A7C84" }} axisLine={false} tickLine={false} />
               <Tooltip
                 formatter={(value: number, key: string) => [
-                  formatCurrency(value),
+                  formatDisplayCurrency(value, isMoneyHidden),
                   key === "collected" ? "Cobrado" : "Gastos",
                 ]}
                 contentStyle={tooltipContentStyle}

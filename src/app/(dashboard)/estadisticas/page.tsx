@@ -3,7 +3,8 @@ import { EstadisticasFilters } from "@/components/estadisticas/estadisticas-filt
 import { EstadisticasCharts, StatisticsTrendChartCard } from "@/components/estadisticas/estadisticas-charts";
 import { InfoPopover } from "@/components/system/info-popover";
 import { MetricCard } from "@/components/system/metric-card";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { MoneyAmount } from "@/components/system/money-amount";
+import { formatDate } from "@/lib/utils";
 import { endOfMonth, format, startOfMonth, subMonths } from "date-fns";
 import { BarChart3, CircleDollarSign, CreditCard, ReceiptText } from "lucide-react";
 
@@ -121,7 +122,7 @@ export default async function EstadisticasPage({ searchParams }: EstadisticasPag
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard
           label="Cobrado en el periodo"
-          value={formatCurrency(analytics.metrics.collectedIncome.current)}
+          value={<MoneyAmount value={analytics.metrics.collectedIncome.current} />}
           subtitle="Pagos registrados dentro del periodo seleccionado."
           hint={buildComparisonHint(analytics.metrics.collectedIncome)}
           icon={CircleDollarSign}
@@ -129,7 +130,7 @@ export default async function EstadisticasPage({ searchParams }: EstadisticasPag
         />
         <MetricCard
           label="Pendiente del periodo"
-          value={formatCurrency(analytics.metrics.pendingIncome.current)}
+          value={<MoneyAmount value={analytics.metrics.pendingIncome.current} />}
           subtitle="Saldo todavia abierto de cobros vinculados al periodo."
           hint={buildComparisonHint(analytics.metrics.pendingIncome)}
           icon={CreditCard}
@@ -137,7 +138,7 @@ export default async function EstadisticasPage({ searchParams }: EstadisticasPag
         />
         <MetricCard
           label="Gastos del periodo"
-          value={formatCurrency(analytics.metrics.periodExpenses.current)}
+          value={<MoneyAmount value={analytics.metrics.periodExpenses.current} />}
           subtitle="Egresos cargados dentro del periodo actual."
           hint={buildComparisonHint(analytics.metrics.periodExpenses)}
           icon={ReceiptText}
@@ -145,7 +146,7 @@ export default async function EstadisticasPage({ searchParams }: EstadisticasPag
         />
         <MetricCard
           label="Resultado neto"
-          value={formatCurrency(analytics.metrics.netResult.current)}
+          value={<MoneyAmount value={analytics.metrics.netResult.current} />}
           subtitle="Cobrado menos gastos del periodo."
           hint={buildComparisonHint(analytics.metrics.netResult)}
           icon={BarChart3}

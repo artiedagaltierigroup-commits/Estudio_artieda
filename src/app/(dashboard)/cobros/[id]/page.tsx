@@ -3,6 +3,7 @@ import { createPayment, deletePayment } from "@/actions/payments";
 import { PaymentForm } from "@/components/charges/payment-form";
 import { EmptyState } from "@/components/system/empty-state";
 import { MetricCard } from "@/components/system/metric-card";
+import { MoneyAmount } from "@/components/system/money-amount";
 import { PageHeader } from "@/components/system/page-header";
 import { SectionCard } from "@/components/system/section-card";
 import { StatusChip } from "@/components/system/status-chip";
@@ -11,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { getChargeStatusTone } from "@/lib/presentation";
-import { formatCurrency, formatDate, formatDateTime, getChargeStatusLabel } from "@/lib/utils";
+import { formatDate, formatDateTime, getChargeStatusLabel } from "@/lib/utils";
 import {
   AlarmClockCheck,
   ArrowLeft,
@@ -56,9 +57,9 @@ export default async function CobroDetailPage({ params }: { params: Promise<{ id
         title={charge.description}
         description={`Caso: ${charge.case?.title ?? "Sin caso"} · Cliente: ${charge.case?.client?.name ?? "Sin cliente"}`}
         stats={[
-          { label: "Total", value: formatCurrency(charge.amountTotal) },
-          { label: "Cobrado", value: formatCurrency(charge.amountPaid) },
-          { label: "Saldo", value: formatCurrency(charge.balance) },
+          { label: "Total", value: <MoneyAmount value={charge.amountTotal} /> },
+          { label: "Cobrado", value: <MoneyAmount value={charge.amountPaid} /> },
+          { label: "Saldo", value: <MoneyAmount value={charge.balance} /> },
           { label: "Estado", value: getChargeStatusLabel(charge.derivedStatus) },
         ]}
         actions={
@@ -86,14 +87,14 @@ export default async function CobroDetailPage({ params }: { params: Promise<{ id
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard
           label="Cobrado"
-          value={formatCurrency(charge.amountPaid)}
+          value={<MoneyAmount value={charge.amountPaid} />}
           subtitle={`${charge.payments.length} pago(s) registrados`}
           icon={HandCoins}
           tone="sage"
         />
         <MetricCard
           label="Saldo pendiente"
-          value={formatCurrency(charge.balance)}
+          value={<MoneyAmount value={charge.balance} />}
           subtitle="Monto que todavia falta recuperar."
           icon={CreditCard}
           tone={charge.balance > 0 ? "amber" : "slate"}
@@ -243,7 +244,9 @@ export default async function CobroDetailPage({ params }: { params: Promise<{ id
                   {payment.notes ? <p className="mt-2 text-sm text-muted-foreground">{payment.notes}</p> : null}
                 </div>
                 <div className="flex items-center gap-3">
-                  <p className="font-semibold text-[#48745f]">{formatCurrency(payment.amount)}</p>
+                  <p className="font-semibold text-[#48745f]">
+                    <MoneyAmount value={payment.amount} />
+                  </p>
                   <form
                     action={async () => {
                       "use server";
