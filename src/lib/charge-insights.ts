@@ -22,6 +22,11 @@ interface FilterableCharge {
   derivedStatus: string;
 }
 
+interface SortableCharge {
+  dueDate: string | null;
+  updatedAt?: string | Date | null;
+}
+
 interface ChargeFilters {
   query?: string;
   status?: string;
@@ -61,4 +66,25 @@ export function filterChargesByFilters<T extends FilterableCharge>(items: T[], f
 
     return matchesQuery && matchesStatus;
   });
+}
+
+export function sortChargesByDueDate<T extends SortableCharge>(items: T[]) {
+  return [...items].sort((left, right) => {
+    if (!left.dueDate && !right.dueDate) return compareUpdatedAtDesc(left.updatedAt, right.updatedAt);
+    if (!left.dueDate) return 1;
+    if (!right.dueDate) return -1;
+
+    const dueDateComparison = left.dueDate.localeCompare(right.dueDate);
+    if (dueDateComparison !== 0) return dueDateComparison;
+
+    return compareUpdatedAtDesc(left.updatedAt, right.updatedAt);
+  });
+}
+
+function compareUpdatedAtDesc(left?: string | Date | null, right?: string | Date | null) {
+  return toTimestamp(right) - toTimestamp(left);
+}
+
+function toTimestamp(value?: string | Date | null) {
+  return value ? new Date(value).getTime() : 0;
 }

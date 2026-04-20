@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { filterChargesByFilters, summarizeChargeRecord } from "./charge-insights";
+import { filterChargesByFilters, sortChargesByDueDate, summarizeChargeRecord } from "./charge-insights";
 
 describe("summarizeChargeRecord", () => {
   it("derives amount paid, balance and status from payments and cancellation", () => {
@@ -65,5 +65,23 @@ describe("filterChargesByFilters", () => {
   it("supports combined filters and returns empty results when nothing matches", () => {
     expect(filterChargesByFilters(items, { query: "diaz", status: "OVERDUE" })).toHaveLength(1);
     expect(filterChargesByFilters(items, { query: "perez", status: "OVERDUE" })).toHaveLength(0);
+  });
+});
+
+describe("sortChargesByDueDate", () => {
+  it("orders charges by closest due date and leaves undated charges last", () => {
+    const charges = [
+      { id: "without-date", dueDate: null, updatedAt: "2026-04-19T10:00:00.000Z" },
+      { id: "farther", dueDate: "2026-05-10", updatedAt: "2026-04-19T12:00:00.000Z" },
+      { id: "closest", dueDate: "2026-04-20", updatedAt: "2026-04-18T12:00:00.000Z" },
+      { id: "same-date-newer", dueDate: "2026-04-20", updatedAt: "2026-04-19T13:00:00.000Z" },
+    ];
+
+    expect(sortChargesByDueDate(charges).map((charge) => charge.id)).toEqual([
+      "same-date-newer",
+      "closest",
+      "farther",
+      "without-date",
+    ]);
   });
 });

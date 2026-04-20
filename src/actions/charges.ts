@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db } from "@/db";
 import { charges, payments } from "@/db/schema";
-import { filterChargesByFilters, summarizeChargeRecord } from "@/lib/charge-insights";
+import { filterChargesByFilters, sortChargesByDueDate, summarizeChargeRecord } from "@/lib/charge-insights";
 import { buildInitialChargePayment } from "@/lib/charge-mutations";
 import { createClient } from "@/lib/supabase/server";
 import { logActivity } from "./activity-log";
@@ -73,7 +73,7 @@ export async function getCharges(filters?: { query?: string; status?: string; ca
     };
   });
 
-  return filterChargesByFilters(enriched, filters ?? {});
+  return sortChargesByDueDate(filterChargesByFilters(enriched, filters ?? {}));
 }
 
 export async function getCharge(id: string) {
