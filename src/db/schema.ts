@@ -28,8 +28,17 @@ export const recurringExpenseOccurrenceStatusEnum = pgEnum("recurring_expense_oc
   "OVERDUE",
   "GENERATED",
 ]);
-export const expenseOriginEnum = pgEnum("expense_origin", ["MANUAL", "RECURRING_AUTOMATIC", "RECURRING_PAYABLE"]);
-export const entityTypeEnum = pgEnum("entity_type", ["case", "charge", "payment", "expense", "reminder"]);
+export const expenseOriginEnum = pgEnum("expense_origin", ["MANUAL", "RECURRING_AUTOMATIC", "RECURRING_PAYABLE", "SAVINGS"]);
+export const savingsGoalStatusEnum = pgEnum("savings_goal_status", ["IN_PROGRESS", "PAUSED"]);
+export const entityTypeEnum = pgEnum("entity_type", [
+  "case",
+  "charge",
+  "payment",
+  "expense",
+  "reminder",
+  "savings_goal",
+  "savings_contribution",
+]);
 export const actionTypeEnum = pgEnum("action_type", [
   "created",
   "updated",
@@ -142,6 +151,27 @@ export const payments = pgTable(
   })
 );
 
+export const savingsGoals = pgTable(
+  "savings_goals",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id").notNull(),
+    name: text("name").notNull(),
+    description: text("description"),
+    targetAmount: decimal("target_amount", { precision: 12, scale: 2 }).notNull(),
+    deadline: date("deadline"),
+    status: savingsGoalStatusEnum("status").notNull().default("IN_PROGRESS"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    userIdIdx: index("savings_goals_user_id_idx").on(table.userId),
+    statusIdx: index("savings_goals_status_idx").on(table.userId, table.status),
+    deadlineIdx: index("savings_goals_deadline_idx").on(table.userId, table.deadline),
+    targetAmountPositiveCheck: check("savings_goals_target_amount_positive_check", sql`${table.targetAmount} > 0`),
+  })
+);
+
 export const expenses = pgTable(
   "expenses",
   {
@@ -152,6 +182,7 @@ export const expenses = pgTable(
     type: expenseTypeEnum("type").notNull().default("OPERATIVE"),
     origin: expenseOriginEnum("origin").notNull().default("MANUAL"),
     recurringExpenseId: uuid("recurring_expense_id").references(() => recurringExpenses.id, { onDelete: "set null" }),
+    savingsGoalId: uuid("savings_goal_id").references(() => savingsGoals.id, { onDelete: "set null" }),
     category: text("category"),
     date: date("date").notNull(),
     appliesToMonth: date("applies_to_month"),
@@ -166,6 +197,7 @@ export const expenses = pgTable(
     userIdIdx: index("expenses_user_id_idx").on(table.userId),
     dateIdx: index("expenses_date_idx").on(table.userId, table.date),
     appliesToMonthIdx: index("expenses_applies_to_month_idx").on(table.userId, table.appliesToMonth),
+    savingsGoalIdx: index("expenses_savings_goal_id_idx").on(table.savingsGoalId),
     voidedAtIdx: index("expenses_voided_at_idx").on(table.voidedAt),
     amountPositiveCheck: check("expenses_amount_positive_check", sql`${table.amount} > 0`),
   })
@@ -239,6 +271,33 @@ export const recurringExpenseOccurrences = pgTable(
   })
 );
 
+export const savingsContributions = pgTable(
+  "savings_contributions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id").notNull(),
+    savingsGoalId: uuid("savings_goal_id")
+      .notNull()
+      .references(() => savingsGoals.id, { onDelete: "cascade" }),
+    expenseId: uuid("expense_id").references(() => expenses.id, { onDelete: "set null" }),
+    amount: decimal("amount", { precision: 12, scale: 2 }).notNull(),
+    contributionDate: date("contribution_date").notNull(),
+    description: text("description"),
+    voidedAt: timestamp("voided_at", { withTimezone: true }),
+    voidReason: text("void_reason"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    userIdIdx: index("savings_contributions_user_id_idx").on(table.userId),
+    savingsGoalIdx: index("savings_contributions_savings_goal_id_idx").on(table.savingsGoalId),
+    dateIdx: index("savings_contributions_date_idx").on(table.userId, table.contributionDate),
+    expenseIdx: index("savings_contributions_expense_id_idx").on(table.expenseId),
+    voidedAtIdx: index("savings_contributions_voided_at_idx").on(table.voidedAt),
+    amountPositiveCheck: check("savings_contributions_amount_positive_check", sql`${table.amount} > 0`),
+  })
+);
+
 export const reminders = pgTable(
   "reminders",
   {
@@ -302,6 +361,20 @@ export const chargesRelations = relations(charges, ({ many, one }) => ({
 
 export const paymentsRelations = relations(payments, ({ one }) => ({
   charge: one(charges, { fields: [payments.chargeId], references: [charges.id] }),
+}));
+
+export const expensesRelations = relations(expenses, ({ one }) => ({
+  recurringExpense: one(recurringExpenses, { fields: [expenses.recurringExpenseId], references: [recurringExpenses.id] }),
+  savingsGoal: one(savingsGoals, { fields: [expenses.savingsGoalId], references: [savingsGoals.id] }),
+}));
+
+export const savingsGoalsRelations = relations(savingsGoals, ({ many }) => ({
+  contributions: many(savingsContributions),
+}));
+
+export const savingsContributionsRelations = relations(savingsContributions, ({ one }) => ({
+  goal: one(savingsGoals, { fields: [savingsContributions.savingsGoalId], references: [savingsGoals.id] }),
+  expense: one(expenses, { fields: [savingsContributions.expenseId], references: [expenses.id] }),
 }));
 
 export const remindersRelations = relations(reminders, ({ one }) => ({

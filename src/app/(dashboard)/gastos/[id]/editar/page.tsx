@@ -10,6 +10,7 @@ export default async function EditarGastoPage({ params }: { params: Promise<{ id
   const { id } = await params;
   const expense = await getExpense(id);
   if (!expense) notFound();
+  if (expense.origin === "SAVINGS") redirect(`/gastos/${id}`);
 
   async function handleSubmit(formData: FormData) {
     "use server";

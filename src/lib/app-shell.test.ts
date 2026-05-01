@@ -10,6 +10,7 @@ describe("dashboardNavigation", () => {
       "/cobros",
       "/calendario",
       "/gastos",
+      "/ahorros",
       "/recordatorios",
       "/estadisticas",
       "/historial",

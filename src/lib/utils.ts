@@ -134,9 +134,20 @@ export function getExpenseOriginLabel(origin: string): string {
     MANUAL: "Manual",
     RECURRING_AUTOMATIC: "Programado",
     RECURRING_PAYABLE: "Por pagar",
+    SAVINGS: "Ahorro",
   };
 
   return labels[origin] ?? origin;
+}
+
+export function getSavingsStatusLabel(status: string): string {
+  const labels: Record<string, string> = {
+    IN_PROGRESS: "En progreso",
+    COMPLETED: "Completado",
+    PAUSED: "Pausado",
+  };
+
+  return labels[status] ?? status;
 }
 
 export function deriveChargeStatus(

@@ -7,6 +7,7 @@ import {
   CreditCard,
   History,
   LayoutDashboard,
+  PiggyBank,
   Receipt,
   Users,
   type LucideIcon,
@@ -55,6 +56,12 @@ export const dashboardNavigation: DashboardNavItem[] = [
     label: "Gastos",
     description: "Control de egresos y proyecciones",
     icon: Receipt,
+  },
+  {
+    href: "/ahorros",
+    label: "Ahorros",
+    description: "Metas de reserva y aportes separados",
+    icon: PiggyBank,
   },
   {
     href: "/recordatorios",

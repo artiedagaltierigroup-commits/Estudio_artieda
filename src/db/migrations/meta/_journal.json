@@ -36,6 +36,20 @@
       "when": 1774800000000,
       "tag": "0004_recurring_expense_modes",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1777660220148,
+      "tag": "0005_nice_triathlon",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1777662085365,
+      "tag": "0006_public_trauma",
+      "breakpoints": true
     }
   ]
 }

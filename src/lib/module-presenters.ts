@@ -18,6 +18,7 @@ export function getCalendarEventLabel(type: string): string {
     reminder: "Recordatorio",
     expense: "Gasto",
     recurring: "Recurrente",
+    savings: "Ahorro",
   };
 
   return labels[type] ?? type;
@@ -57,6 +58,8 @@ export function getActivityEntityLabel(entityType: string): string {
     payment: "Pago",
     expense: "Gasto",
     reminder: "Recordatorio",
+    savings_goal: "Ahorro",
+    savings_contribution: "Aporte de ahorro",
   };
 
   return labels[entityType] ?? entityType;

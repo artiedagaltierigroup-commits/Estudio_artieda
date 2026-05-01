@@ -92,6 +92,18 @@ export function getChargeStatusTone(status: string): VisualTone {
   }
 }
 
+export function getSavingsStatusTone(status: string): VisualTone {
+  switch (status) {
+    case "COMPLETED":
+      return "sage";
+    case "PAUSED":
+      return "slate";
+    case "IN_PROGRESS":
+    default:
+      return "amber";
+  }
+}
+
 export function getNameInitials(name: string): string {
   const parts = name
     .trim()

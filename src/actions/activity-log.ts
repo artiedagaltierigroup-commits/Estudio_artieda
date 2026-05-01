@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 
 interface LogParams {
   userId: string;
-  entityType: "case" | "charge" | "payment" | "expense" | "reminder";
+  entityType: "case" | "charge" | "payment" | "expense" | "reminder" | "savings_goal" | "savings_contribution";
   entityId: string;
   action: "created" | "updated" | "deleted" | "status_changed" | "due_date_changed";
   previousValue?: Record<string, unknown>;

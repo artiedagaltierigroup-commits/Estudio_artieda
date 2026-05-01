@@ -97,6 +97,7 @@ export async function updateExpense(id: string, formData: FormData) {
       andOperator(eqOperator(item.id, id), eqOperator(item.userId, userId)),
   });
   if (!existing) return { error: "Gasto no encontrado" };
+  if (existing.origin === "SAVINGS") return { error: "Los gastos de ahorro se editan desde Ahorros" };
 
   await db
     .update(expenses)
@@ -126,6 +127,7 @@ export async function voidExpense(id: string, reason?: string) {
   });
   if (!existing) return { error: "Gasto no encontrado" };
   if (existing.voidedAt) return { error: "El gasto ya esta anulado" };
+  if (existing.origin === "SAVINGS") return { error: "Los gastos de ahorro se gestionan desde Ahorros" };
 
   const voidedAt = new Date();
 
@@ -166,6 +168,7 @@ export async function deleteExpense(id: string) {
       andOperator(eqOperator(item.id, id), eqOperator(item.userId, userId)),
   });
   if (!existing) return { error: "Gasto no encontrado" };
+  if (existing.origin === "SAVINGS") return { error: "Los gastos de ahorro se gestionan desde Ahorros" };
 
   await db.delete(expenses).where(and(eq(expenses.id, id), eq(expenses.userId, userId)));
 

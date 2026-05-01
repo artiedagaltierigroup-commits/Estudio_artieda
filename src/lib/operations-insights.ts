@@ -21,7 +21,7 @@ interface CalendarEventLike {
 }
 
 interface ActivityLike {
-  entityType: "case" | "charge" | "payment" | "expense" | "reminder";
+  entityType: "case" | "charge" | "payment" | "expense" | "reminder" | "savings_goal" | "savings_contribution";
   action: "created" | "updated" | "deleted" | "status_changed" | "due_date_changed";
   note?: string | null;
   previousValue?: unknown;
@@ -173,6 +173,8 @@ export function summarizeActivityMetrics(entries: Pick<ActivityLike, "action" | 
     payment: 0,
     expense: 0,
     reminder: 0,
+    savings_goal: 0,
+    savings_contribution: 0,
   };
 
   for (const entry of entries) {
