@@ -122,8 +122,8 @@ export function getFrequencyLabel(freq: string): string {
 
 export function getRecurringModeLabel(mode: string): string {
   const labels: Record<string, string> = {
-    AUTOMATIC: "Gasto programado",
-    PAYABLE: "Gasto por pagar",
+    AUTOMATIC: "Automatico sin checklist",
+    PAYABLE: "Con checklist",
   };
 
   return labels[mode] ?? mode;

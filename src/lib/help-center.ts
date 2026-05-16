@@ -310,7 +310,7 @@ export const helpEntries: HelpEntry[] = [
     title: "Diferencia entre gasto comun y recurrente",
     summary: "El gasto comun registra un hecho real; el recurrente funciona como plantilla de proyeccion.",
     content:
-      "Un gasto comun impacta directo en el historial y en el saldo del periodo. Un gasto recurrente sirve para repetir o proyectar egresos fijos, como alquileres, plataformas o servicios del estudio.",
+      "Un gasto comun impacta directo en el historial y en el saldo del periodo. Un gasto recurrente sirve para repetir o proyectar egresos fijos, como alquileres, plataformas o servicios del estudio. Puede ser automatico sin checklist si se debita solo, o con checklist si queres marcar manualmente cuando lo pagaste.",
     keywords: ["gasto recurrente", "plantilla", "proyeccion", "gasto comun"],
     href: "/gastos/recurrentes",
   },

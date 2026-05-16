@@ -51,11 +51,11 @@ export function RecurringExpenseForm({
         <SectionCard
           eyebrow="Plantilla"
           title="Datos del recurrente"
-          description="Configura si el gasto se genera solo o si queres controlarlo manualmente como pago pendiente."
+          description="Elegir si entra automatico como debito o si aparece en el checklist para marcarlo pagado."
         >
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2 sm:col-span-2">
-              <Label htmlFor="mode">Tipo de recurrente</Label>
+              <Label htmlFor="mode">Control del recurrente</Label>
               <select
                 id="mode"
                 name="mode"
@@ -63,9 +63,12 @@ export function RecurringExpenseForm({
                 onChange={(event) => setMode(event.target.value as "AUTOMATIC" | "PAYABLE")}
                 className={selectClassName}
               >
-                <option value="PAYABLE">Gasto por pagar</option>
-                <option value="AUTOMATIC">Gasto programado</option>
+                <option value="PAYABLE">Con checklist: lo pago manualmente</option>
+                <option value="AUTOMATIC">Automatico: debito sin checklist</option>
               </select>
+              <p className="text-xs text-muted-foreground">
+                Checklist lo muestra como pendiente hasta marcarlo pagado. Automatico crea el gasto real cuando llega su fecha.
+              </p>
             </div>
 
             <div className="space-y-2 sm:col-span-2">
@@ -243,15 +246,15 @@ export function RecurringExpenseForm({
         title={getRecurringModeLabel(mode)}
         description={
           mode === "AUTOMATIC"
-            ? "Se transforma solo en gasto real cuando llega su fecha."
-            : "Queda visible para pagar, controlar vencimiento y marcarlo manualmente."
+            ? "Debito o salida fija que se registra sola, sin aparecer en el checklist."
+            : "Queda visible en el checklist para controlar vencimiento y marcarlo manualmente."
         }
       >
         <div className="space-y-3 text-sm leading-6 text-muted-foreground">
           {mode === "AUTOMATIC" ? (
             <>
               <div className="rounded-[24px] border border-border/70 bg-white/80 p-4">
-                Ideal para salidas fijas que queres registrar sin marcar nada a mano.
+                Ideal para debitos automaticos o salidas fijas que queres registrar sin tocar nada.
               </div>
               <div className="rounded-[24px] border border-border/70 bg-white/80 p-4">
                 Cuando toca su fecha, el sistema crea el gasto real automaticamente.
@@ -260,7 +263,7 @@ export function RecurringExpenseForm({
           ) : (
             <>
               <div className="rounded-[24px] border border-border/70 bg-white/80 p-4">
-                Ideal para alquiler, impuestos o servicios que queres ver como pendientes hasta pagarlos.
+                Ideal para alquiler, impuestos o servicios que queres ver en el checklist hasta pagarlos.
               </div>
               <div className="rounded-[24px] border border-border/70 bg-white/80 p-4">
                 Se avisa antes del vencimiento, pasa a vencido si no se paga y recien impacta en gastos cuando lo marcas como pagado.
