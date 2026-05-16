@@ -15,6 +15,7 @@ export function DashboardShell({
   email?: string;
 }) {
   const [collapsed, setCollapsed] = useState(false);
+  const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false);
 
   useEffect(() => {
     const saved = window.localStorage.getItem(STORAGE_KEY);
@@ -34,9 +35,19 @@ export function DashboardShell({
   return (
     <MoneyVisibilityProvider>
       <div className="flex h-screen overflow-hidden bg-[#fffdfd]">
-        <Sidebar collapsed={collapsed} onToggle={handleToggleSidebar} />
+        <Sidebar
+          collapsed={collapsed}
+          mobileOpen={mobileNavigationOpen}
+          onCloseMobile={() => setMobileNavigationOpen(false)}
+          onToggle={handleToggleSidebar}
+        />
         <div className="flex flex-1 flex-col overflow-hidden">
-          <Header email={email} onToggleSidebar={handleToggleSidebar} sidebarCollapsed={collapsed} />
+          <Header
+            email={email}
+            onOpenMobileNavigation={() => setMobileNavigationOpen(true)}
+            onToggleSidebar={handleToggleSidebar}
+            sidebarCollapsed={collapsed}
+          />
           <main className="flex-1 overflow-y-auto bg-[#fffdfd] p-6">{children}</main>
         </div>
       </div>

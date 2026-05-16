@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/client";
 import { usePathname, useRouter } from "next/navigation";
-import { Eye, EyeOff, LogOut, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { Eye, EyeOff, LogOut, Menu, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { toast } from "sonner";
 import { getRouteMeta } from "@/lib/app-shell";
 import { useMoneyVisibility } from "@/components/system/money-visibility-provider";
@@ -11,9 +11,10 @@ interface HeaderProps {
   email?: string;
   sidebarCollapsed: boolean;
   onToggleSidebar: () => void;
+  onOpenMobileNavigation: () => void;
 }
 
-export function Header({ email, sidebarCollapsed, onToggleSidebar }: HeaderProps) {
+export function Header({ email, sidebarCollapsed, onToggleSidebar, onOpenMobileNavigation }: HeaderProps) {
   const router = useRouter();
   const pathname = usePathname();
   const supabase = createClient();
@@ -30,6 +31,15 @@ export function Header({ email, sidebarCollapsed, onToggleSidebar }: HeaderProps
   return (
     <header className="flex flex-shrink-0 items-center justify-between border-b border-border/80 bg-card/80 px-6 py-4 backdrop-blur">
       <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={onOpenMobileNavigation}
+          aria-label="Abrir menu de navegacion"
+          className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-border bg-background text-muted-foreground transition-colors hover:text-foreground md:hidden"
+          title="Abrir menu"
+        >
+          <Menu className="h-4 w-4" />
+        </button>
         <button
           type="button"
           onClick={onToggleSidebar}
