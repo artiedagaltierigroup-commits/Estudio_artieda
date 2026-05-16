@@ -3,7 +3,7 @@ import { es } from "date-fns/locale";
 import { MoneyAmount } from "@/components/system/money-amount";
 import { SectionCard } from "@/components/system/section-card";
 import { StatusChip } from "@/components/system/status-chip";
-import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/system/submit-button";
 import { getReminderPriorityTone } from "@/lib/module-presenters";
 import { getReminderWindowStart } from "@/lib/recurring-expense-occurrences";
 import { formatDate, getPriorityLabel } from "@/lib/utils";
@@ -68,14 +68,14 @@ function ChecklistCard({
       <div className="flex items-start gap-3">
         <form action={action} className="pt-1">
           <input type="hidden" name="occurrenceId" value={item.occurrenceId} />
-          <Button
-            type="submit"
+          <SubmitButton
             variant="ghost"
             size="icon"
             className={`h-9 w-9 rounded-full border ${done ? "border-emerald-300 bg-emerald-50 text-emerald-700" : "border-border"}`}
+            pendingLabel={done ? <RotateCcw className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
           >
             {done ? <CheckCircle2 className="h-4 w-4" /> : <Circle className="h-4 w-4" />}
-          </Button>
+          </SubmitButton>
         </form>
 
         <div className="min-w-0 flex-1 space-y-3">

@@ -16,6 +16,7 @@ import { MoneyAmount } from "@/components/system/money-amount";
 import { PageHeader } from "@/components/system/page-header";
 import { SectionCard } from "@/components/system/section-card";
 import { StatusChip } from "@/components/system/status-chip";
+import { SubmitButton } from "@/components/system/submit-button";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -186,10 +187,10 @@ export default async function RecordatoriosPage() {
               </div>
             </div>
             <div className="flex justify-end">
-              <Button type="submit">
+              <SubmitButton>
                 <Plus className="h-4 w-4" />
                 Guardar recordatorio
-              </Button>
+              </SubmitButton>
             </div>
           </form>
         </SectionCard>
@@ -262,17 +263,17 @@ export default async function RecordatoriosPage() {
                   <div className="flex flex-wrap gap-2">
                     <form action={handleComplete}>
                       <input type="hidden" name="reminderId" value={item.id} />
-                      <Button type="submit" variant="secondary">
+                      <SubmitButton variant="secondary" pendingLabel="Resolviendo...">
                         <CheckCircle2 className="h-4 w-4" />
                         Resolver
-                      </Button>
+                      </SubmitButton>
                     </form>
                     <form action={handleDelete}>
                       <input type="hidden" name="reminderId" value={item.id} />
-                      <Button type="submit" variant="ghost" className="text-[#9a4e69]">
+                      <SubmitButton variant="ghost" className="text-[#9a4e69]" pendingLabel="Eliminando...">
                         <Trash2 className="h-4 w-4" />
                         Eliminar
-                      </Button>
+                      </SubmitButton>
                     </form>
                   </div>
                 </div>
@@ -303,10 +304,10 @@ export default async function RecordatoriosPage() {
               </div>
               <form action={handleReopen}>
                 <input type="hidden" name="reminderId" value={item.id} />
-                <Button type="submit" variant="ghost">
+                <SubmitButton variant="ghost" pendingLabel="Reabriendo...">
                   <RotateCcw className="h-4 w-4" />
                   Reabrir
-                </Button>
+                </SubmitButton>
               </form>
             </div>
           ))}
@@ -344,10 +345,10 @@ export default async function RecordatoriosPage() {
                 <div className="flex flex-wrap gap-2">
                   <form action={handlePayRecurring}>
                     <input type="hidden" name="occurrenceId" value={item.id} />
-                    <Button type="submit" variant="secondary">
+                    <SubmitButton variant="secondary" pendingLabel="Marcando...">
                       <CheckCircle2 className="h-4 w-4" />
                       Marcar pagado
-                    </Button>
+                    </SubmitButton>
                   </form>
                 </div>
               </div>

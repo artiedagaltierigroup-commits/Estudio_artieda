@@ -1,4 +1,4 @@
-import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/system/submit-button";
 import { CurrencyInput } from "@/components/ui/currency-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -31,10 +31,10 @@ export function SavingsContributionForm({
         <Input id={`description-${savingsGoalId}`} name="description" placeholder="Opcional" />
       </div>
       <div className="flex items-end">
-        <Button type="submit" className="w-full">
+        <SubmitButton className="w-full">
           <PiggyBank className="h-4 w-4" />
           Anadir
-        </Button>
+        </SubmitButton>
       </div>
     </form>
   );

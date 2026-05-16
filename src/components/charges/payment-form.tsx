@@ -1,4 +1,4 @@
-import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/system/submit-button";
 import { CurrencyInput } from "@/components/ui/currency-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -45,10 +45,10 @@ export function PaymentForm({ action, chargeId, remainingBalance }: PaymentFormP
       </div>
 
       <div className="flex justify-end">
-        <Button type="submit">
+        <SubmitButton>
           <Save className="h-4 w-4" />
           Registrar pago
-        </Button>
+        </SubmitButton>
       </div>
     </form>
   );

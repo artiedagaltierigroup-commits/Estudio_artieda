@@ -12,6 +12,7 @@ import { MoneyAmount } from "@/components/system/money-amount";
 import { PageHeader } from "@/components/system/page-header";
 import { SectionCard } from "@/components/system/section-card";
 import { StatusChip } from "@/components/system/status-chip";
+import { SubmitButton } from "@/components/system/submit-button";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { getSavingsStatusTone } from "@/lib/presentation";
@@ -182,10 +183,10 @@ export default async function AhorrosPage({ searchParams }: AhorrosPageProps) {
                         <form action={handleStatus}>
                           <input type="hidden" name="id" value={goal.id} />
                           <input type="hidden" name="status" value={isPaused ? "IN_PROGRESS" : "PAUSED"} />
-                          <Button type="submit" variant="outline" size="sm">
+                          <SubmitButton variant="outline" size="sm" pendingLabel={isPaused ? "Reactivando..." : "Pausando..."}>
                             {isPaused ? <CirclePlay className="h-4 w-4" /> : <CirclePause className="h-4 w-4" />}
                             {isPaused ? "Reactivar" : "Pausar"}
-                          </Button>
+                          </SubmitButton>
                         </form>
                       ) : null}
                     </div>

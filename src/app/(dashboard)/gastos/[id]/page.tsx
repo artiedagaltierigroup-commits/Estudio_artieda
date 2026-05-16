@@ -4,6 +4,7 @@ import { MoneyAmount } from "@/components/system/money-amount";
 import { PageHeader } from "@/components/system/page-header";
 import { SectionCard } from "@/components/system/section-card";
 import { StatusChip } from "@/components/system/status-chip";
+import { SubmitButton } from "@/components/system/submit-button";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -131,10 +132,10 @@ export default async function GastoDetailPage({ params }: { params: Promise<{ id
                 <Textarea id="reason" name="reason" placeholder="Ejemplo: monto equivocado o ahorro incorrecto." />
               </div>
               <div className="flex justify-end">
-                <Button type="submit" variant="outline">
+                <SubmitButton variant="outline" pendingLabel="Anulando...">
                   <XCircle className="h-4 w-4" />
                   Anular aporte
-                </Button>
+                </SubmitButton>
               </div>
             </form>
           ) : isVoided ? (
@@ -149,10 +150,10 @@ export default async function GastoDetailPage({ params }: { params: Promise<{ id
                 <Textarea id="reason" name="reason" placeholder="Motivo de la anulacion del gasto." />
               </div>
               <div className="flex justify-end">
-                <Button type="submit" variant="outline">
+                <SubmitButton variant="outline" pendingLabel="Anulando...">
                   <XCircle className="h-4 w-4" />
                   Anular gasto
-                </Button>
+                </SubmitButton>
               </div>
             </form>
           )}

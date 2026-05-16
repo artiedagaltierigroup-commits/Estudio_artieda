@@ -7,6 +7,7 @@ import { MoneyAmount } from "@/components/system/money-amount";
 import { PageHeader } from "@/components/system/page-header";
 import { SectionCard } from "@/components/system/section-card";
 import { StatusChip } from "@/components/system/status-chip";
+import { SubmitButton } from "@/components/system/submit-button";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -181,10 +182,10 @@ export default async function CobroDetailPage({ params }: { params: Promise<{ id
               <Input id="followUpDate" name="followUpDate" type="date" defaultValue={charge.followUpDate ?? ""} />
             </div>
             <div className="sm:col-span-2 flex justify-end">
-              <Button type="submit">
+              <SubmitButton>
                 <AlarmClockCheck className="h-4 w-4" />
                 Guardar fechas
-              </Button>
+              </SubmitButton>
             </div>
           </form>
         </SectionCard>
@@ -205,10 +206,10 @@ export default async function CobroDetailPage({ params }: { params: Promise<{ id
                 <Textarea id="reason" name="reason" placeholder="Motivo de la cancelacion del cobro." />
               </div>
               <div className="flex justify-end">
-                <Button type="submit" variant="outline">
+                <SubmitButton variant="outline" pendingLabel="Cancelando...">
                   <XCircle className="h-4 w-4" />
                   Cancelar cobro
-                </Button>
+                </SubmitButton>
               </div>
             </form>
           )}
@@ -253,9 +254,9 @@ export default async function CobroDetailPage({ params }: { params: Promise<{ id
                       await deletePayment(payment.id, charge.caseId, charge.id);
                     }}
                   >
-                    <Button type="submit" variant="ghost" size="sm">
+                    <SubmitButton variant="ghost" size="sm" pendingLabel="Eliminando...">
                       Eliminar
-                    </Button>
+                    </SubmitButton>
                   </form>
                 </div>
               </li>

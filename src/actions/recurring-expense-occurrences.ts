@@ -295,38 +295,70 @@ export async function markRecurringOccurrencePaid(id: string) {
   const userId = await getUserId();
   await syncRecurringExpenseOccurrences(new Date());
 
-  const [row] = await db
-    .select({
-      occurrence: recurringExpenseOccurrences,
-      recurring: recurringExpenses,
-    })
-    .from(recurringExpenseOccurrences)
-    .innerJoin(recurringExpenses, eq(recurringExpenseOccurrences.recurringExpenseId, recurringExpenses.id))
-    .where(and(eq(recurringExpenseOccurrences.id, id), eq(recurringExpenseOccurrences.userId, userId)))
-    .limit(1);
+  const result = await db.transaction(async (tx) => {
+    const [row] = await tx
+      .select({
+        occurrence: recurringExpenseOccurrences,
+        recurring: recurringExpenses,
+      })
+      .from(recurringExpenseOccurrences)
+      .innerJoin(recurringExpenses, eq(recurringExpenseOccurrences.recurringExpenseId, recurringExpenses.id))
+      .where(and(eq(recurringExpenseOccurrences.id, id), eq(recurringExpenseOccurrences.userId, userId)))
+      .limit(1)
+      .for("update");
 
-  if (!row) return { error: "Vencimiento recurrente no encontrado" };
-  if (row.recurring.mode !== "PAYABLE") return { error: "Solo se pueden marcar pagos manuales en gastos por pagar" };
-  if (row.occurrence.status === "PAID") return { success: true };
+    if (!row) return { error: "Vencimiento recurrente no encontrado" } as const;
+    if (row.recurring.mode !== "PAYABLE") {
+      return { error: "Solo se pueden marcar pagos manuales en gastos por pagar" } as const;
+    }
+    if (row.occurrence.status === "PAID") return { success: true, alreadyPaid: true } as const;
 
-  const paymentDate = format(new Date(), "yyyy-MM-dd");
-  const expense = await createRecurringExpenseRealization({
-    recurring: row.recurring,
-    userId,
-    date: paymentDate,
-    dueDate: row.occurrence.dueDate,
-    origin: "RECURRING_PAYABLE",
+    const paymentDate = format(new Date(), "yyyy-MM-dd");
+    const [expense] = await tx
+      .insert(expenses)
+      .values({
+        userId,
+        description: row.recurring.description,
+        amount: row.recurring.amount,
+        type: row.recurring.type,
+        origin: "RECURRING_PAYABLE",
+        recurringExpenseId: row.recurring.id,
+        category: row.recurring.category,
+        date: paymentDate,
+        notes: buildExpenseNote(row.recurring, row.occurrence.dueDate, "gasto por pagar"),
+      })
+      .returning();
+
+    await tx
+      .update(recurringExpenseOccurrences)
+      .set({
+        status: "PAID",
+        expenseId: expense.id,
+        paidAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(recurringExpenseOccurrences.id, row.occurrence.id));
+
+    return { success: true, expense, recurring: row.recurring } as const;
   });
 
-  await db
-    .update(recurringExpenseOccurrences)
-    .set({
-      status: "PAID",
-      expenseId: expense.id,
-      paidAt: new Date(),
-      updatedAt: new Date(),
-    })
-    .where(eq(recurringExpenseOccurrences.id, row.occurrence.id));
+  if ("error" in result) return result;
+
+  if (!result.alreadyPaid) {
+    await logActivity({
+      userId,
+      entityType: "expense",
+      entityId: result.expense.id,
+      action: "created",
+      newValue: {
+        description: result.recurring.description,
+        amount: result.recurring.amount,
+        origin: "RECURRING_PAYABLE",
+        recurringExpenseId: result.recurring.id,
+      },
+      note: "Gasto real generado al marcar pago de recurrente por pagar",
+    });
+  }
 
   revalidateRecurringSurface();
   return { success: true };

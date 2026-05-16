@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { createClientInlineAction } from "@/actions/clients";
 import { SectionCard } from "@/components/system/section-card";
+import { SubmitButton } from "@/components/system/submit-button";
 import { Button } from "@/components/ui/button";
 import { CurrencyInput } from "@/components/ui/currency-input";
 import { Input } from "@/components/ui/input";
@@ -368,10 +369,10 @@ export function CaseForm({
           <Button asChild variant="outline">
             <Link href={cancelHref}>Cancelar</Link>
           </Button>
-          <Button type="submit">
+          <SubmitButton>
             <Save className="h-4 w-4" />
             {submitLabel}
-          </Button>
+          </SubmitButton>
         </div>
       </form>
 

@@ -1,4 +1,5 @@
 import { SectionCard } from "@/components/system/section-card";
+import { SubmitButton } from "@/components/system/submit-button";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -116,10 +117,10 @@ export function ClientForm({ action, cancelHref, submitLabel, initialValues }: C
           <Button asChild variant="outline">
             <Link href={cancelHref}>Cancelar</Link>
           </Button>
-          <Button type="submit">
+          <SubmitButton>
             <Save className="h-4 w-4" />
             {submitLabel}
-          </Button>
+          </SubmitButton>
         </div>
       </form>
 
