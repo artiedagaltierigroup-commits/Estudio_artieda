@@ -133,7 +133,7 @@ export function RecurringPayablesChecklist({
           </div>
           {pending.length === 0 ? (
             <div className="rounded-[24px] border border-dashed border-border/70 bg-muted/15 p-5 text-sm text-muted-foreground">
-              No hay gastos por pagar visibles en esta ventana.
+              No hay gastos por pagar para este mes.
             </div>
           ) : (
             pending.map((item) => <ChecklistCard key={item.occurrenceId} item={item} action={onMarkPaid} done={false} />)

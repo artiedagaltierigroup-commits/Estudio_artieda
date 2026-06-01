@@ -1,12 +1,16 @@
 "use server";
 
 import { and, asc, eq, gte, inArray, lte } from "drizzle-orm";
-import { addDays, endOfMonth, format, isAfter, isBefore, parseISO, startOfMonth } from "date-fns";
+import { addDays, endOfMonth, format } from "date-fns";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db";
 import { expenses, recurringExpenseOccurrences, recurringExpenses } from "@/db/schema";
 import {
-  getReminderWindowStart,
+  buildRecurringPayableChecklist,
+  getRecurringPayableChecklistRange,
+  isRecurringPayableAlertVisible,
+} from "@/lib/recurring-expense-checklist";
+import {
   getRecurringOccurrenceStatus,
   listRecurringDueDates,
   type RecurringExpenseOccurrenceStatus,
@@ -16,12 +20,6 @@ import { logActivity } from "./activity-log";
 
 type RecurringExpenseRow = typeof recurringExpenses.$inferSelect;
 type RecurringOccurrenceRow = typeof recurringExpenseOccurrences.$inferSelect;
-
-const PRIORITY_WEIGHT = {
-  HIGH: 0,
-  MEDIUM: 1,
-  LOW: 2,
-} as const;
 
 async function getUserId(): Promise<string> {
   const supabase = await createClient();
@@ -216,9 +214,7 @@ export async function getRecurringPayableChecklist(referenceDate = new Date()) {
   await syncRecurringExpenseOccurrences(referenceDate);
 
   const userId = await getUserId();
-  const todayKey = format(referenceDate, "yyyy-MM-dd");
-  const monthStartKey = format(startOfMonth(referenceDate), "yyyy-MM-dd");
-  const horizonKey = format(addDays(referenceDate, 15), "yyyy-MM-dd");
+  const checklistRange = getRecurringPayableChecklistRange(referenceDate);
 
   const rows = await db
     .select({
@@ -241,54 +237,29 @@ export async function getRecurringPayableChecklist(referenceDate = new Date()) {
       and(
         eq(recurringExpenseOccurrences.userId, userId),
         eq(recurringExpenses.mode, "PAYABLE"),
-        gte(recurringExpenseOccurrences.dueDate, monthStartKey),
-        lte(recurringExpenseOccurrences.dueDate, horizonKey)
+        gte(recurringExpenseOccurrences.dueDate, checklistRange.from),
+        lte(recurringExpenseOccurrences.dueDate, checklistRange.to)
       )
     )
     .orderBy(asc(recurringExpenseOccurrences.dueDate));
 
-  const visibleRows = rows.filter((row) => {
-    if (row.status === "PAID") return true;
-    return getReminderWindowStart(row.dueDate, row.notifyDaysBefore) <= todayKey;
-  });
-
-  const pending = visibleRows
-    .filter((row) => row.status !== "PAID")
-    .sort((left, right) => {
-      const leftOverdue = left.status === "OVERDUE";
-      const rightOverdue = right.status === "OVERDUE";
-      if (leftOverdue !== rightOverdue) return leftOverdue ? -1 : 1;
-      const dateDelta = left.dueDate.localeCompare(right.dueDate);
-      if (dateDelta !== 0) return dateDelta;
-      return PRIORITY_WEIGHT[left.priority] - PRIORITY_WEIGHT[right.priority];
-    });
-
-  const paid = visibleRows
-    .filter((row) => row.status === "PAID")
-    .sort((left, right) => right.dueDate.localeCompare(left.dueDate));
-
-  return {
-    pending: pending.map((item) => ({ ...item, status: item.status as "PENDING" | "OVERDUE" })),
-    paid: paid.map((item) => ({ ...item, status: "PAID" as const })),
-    summary: {
-      pending: pending.length,
-      overdue: pending.filter((item) => item.status === "OVERDUE").length,
-      paid: paid.length,
-    },
-  };
+  return buildRecurringPayableChecklist(rows);
 }
 
 export async function getRecurringPayableAlerts(referenceDate = new Date()) {
   const checklist = await getRecurringPayableChecklist(referenceDate);
+  const todayKey = format(referenceDate, "yyyy-MM-dd");
 
-  return checklist.pending.map((item) => ({
-    id: item.occurrenceId,
-    title: item.description,
-    reminderDate: new Date(`${item.dueDate}T12:00:00.000Z`),
-    priority: item.priority,
-    amount: Number(item.amount),
-    status: item.status as Extract<RecurringExpenseOccurrenceStatus, "PENDING" | "OVERDUE">,
-  }));
+  return checklist.pending
+    .filter((item) => isRecurringPayableAlertVisible(item, todayKey))
+    .map((item) => ({
+      id: item.occurrenceId,
+      title: item.description,
+      reminderDate: new Date(`${item.dueDate}T12:00:00.000Z`),
+      priority: item.priority,
+      amount: Number(item.amount),
+      status: item.status as Extract<RecurringExpenseOccurrenceStatus, "PENDING" | "OVERDUE">,
+    }));
 }
 
 export async function markRecurringOccurrencePaid(id: string) {
