@@ -5,6 +5,7 @@ import {
   Calendar,
   CircleHelp,
   CreditCard,
+  FileSignature,
   History,
   LayoutDashboard,
   PiggyBank,
@@ -38,6 +39,12 @@ export const dashboardNavigation: DashboardNavItem[] = [
     label: "Casos",
     description: "Expedientes abiertos, cerrados y en curso",
     icon: Briefcase,
+  },
+  {
+    href: "/firmas",
+    label: "Firmas",
+    description: "Solicitudes, documentos firmados y seguimiento",
+    icon: FileSignature,
   },
   {
     href: "/cobros",

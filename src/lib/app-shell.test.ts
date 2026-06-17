@@ -7,6 +7,7 @@ describe("dashboardNavigation", () => {
       "/",
       "/clientes",
       "/casos",
+      "/firmas",
       "/cobros",
       "/calendario",
       "/gastos",
@@ -16,6 +17,8 @@ describe("dashboardNavigation", () => {
       "/historial",
       "/configuracion",
     ]);
+
+    expect(dashboardNavigation.some((item) => item.href === "/firmas" && item.label === "Firmas")).toBe(true);
   });
 });
 
