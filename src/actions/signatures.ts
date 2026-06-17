@@ -506,3 +506,17 @@ export async function downloadSignedDocument(requestId: string) {
   revalidateSignaturePaths(request);
   return { success: true, storagePath: request.document.signedStoragePath };
 }
+
+export async function getSignatureOriginalDocumentUrl(requestId: string) {
+  const userId = await getUserId();
+  const request = await getOwnedSignatureRequest(requestId, userId);
+  if (!request?.document) return null;
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.storage
+    .from(SIGNATURE_BUCKET)
+    .createSignedUrl(request.document.originalStoragePath, 60 * 10);
+
+  if (error) return null;
+  return data.signedUrl;
+}
