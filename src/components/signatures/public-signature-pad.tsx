@@ -11,13 +11,19 @@ import { useEffect, useRef, useState, useTransition } from "react";
 interface PublicSignaturePadProps {
   token: string;
   savedSignatureAvailable: boolean;
+  canSaveSignatureForClient: boolean;
 }
 
-export function PublicSignaturePad({ token, savedSignatureAvailable }: PublicSignaturePadProps) {
+export function PublicSignaturePad({
+  token,
+  savedSignatureAvailable,
+  canSaveSignatureForClient,
+}: PublicSignaturePadProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const padRef = useRef<SignaturePad | null>(null);
   const [signatureDataUrl, setSignatureDataUrl] = useState("");
   const [useSavedSignature, setUseSavedSignature] = useState(savedSignatureAvailable);
+  const [saveForClient, setSaveForClient] = useState(false);
   const [consent, setConsent] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -63,6 +69,7 @@ export function PublicSignaturePad({ token, savedSignatureAvailable }: PublicSig
     padRef.current?.clear();
     setSignatureDataUrl("");
     setUseSavedSignature(false);
+    setSaveForClient(false);
   }
 
   function handleSubmit() {
@@ -71,7 +78,7 @@ export function PublicSignaturePad({ token, savedSignatureAvailable }: PublicSig
     formData.set("consent", consent ? "on" : "off");
     formData.set("signatureDataUrl", useSavedSignature ? "data:image/png;base64,saved-signature-placeholder" : signatureDataUrl);
     formData.set("useSavedSignature", useSavedSignature ? "on" : "off");
-    formData.set("saveForClient", "on");
+    formData.set("saveForClient", !useSavedSignature && saveForClient ? "on" : "off");
 
     startTransition(async () => {
       const result = await submitPublicSignature(token, formData);
@@ -112,7 +119,10 @@ export function PublicSignaturePad({ token, savedSignatureAvailable }: PublicSig
           <Button
             type="button"
             variant={useSavedSignature ? "default" : "outline"}
-            onClick={() => setUseSavedSignature(true)}
+            onClick={() => {
+              setUseSavedSignature(true);
+              setSaveForClient(false);
+            }}
           >
             Usar firma guardada
           </Button>
@@ -155,6 +165,20 @@ export function PublicSignaturePad({ token, savedSignatureAvailable }: PublicSig
           datos tecnicos de la operacion.
         </Label>
       </div>
+
+      {!useSavedSignature && canSaveSignatureForClient ? (
+        <div className="flex items-start gap-3 rounded-[24px] border border-border/70 bg-white/90 p-4">
+          <Checkbox
+            id="saveForClient"
+            checked={saveForClient}
+            onCheckedChange={(value) => setSaveForClient(value === true)}
+            className="mt-0.5"
+          />
+          <Label htmlFor="saveForClient" className="text-sm leading-6 text-muted-foreground">
+            Guardar esta firma para reutilizarla en futuras solicitudes del estudio.
+          </Label>
+        </div>
+      ) : null}
 
       {error ? (
         <div className="rounded-2xl border border-[#e8b6bc] bg-[#fff4f5] px-3 py-2 text-sm text-[#9d4d4d]">

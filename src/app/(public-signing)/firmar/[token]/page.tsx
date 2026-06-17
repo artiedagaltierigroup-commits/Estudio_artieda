@@ -86,7 +86,11 @@ export default async function PublicSigningPage({ params }: { params: Promise<{ 
               </p>
             </div>
           ) : (
-            <PublicSignaturePad token={token} savedSignatureAvailable={request.savedSignatureAvailable} />
+            <PublicSignaturePad
+              token={token}
+              savedSignatureAvailable={request.savedSignatureAvailable}
+              canSaveSignatureForClient={request.canSaveSignatureForClient}
+            />
           )}
 
           <form action={rejectAction.bind(null, token)}>

@@ -6,6 +6,7 @@ import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { db } from "../db";
 import { clientSavedSignatures, signatureDocuments, signatureEvents, signatureRequests } from "../db/schema";
+import { shouldOfferSavedSignature } from "../lib/client-saved-signatures";
 import { buildSignatureStoragePath, hashBufferSha256, SIGNATURE_BUCKET } from "../lib/signature-files";
 import { embedSignatureInPdf } from "../lib/signature-pdf";
 import { createClient } from "../lib/supabase/server";
@@ -123,7 +124,11 @@ export async function getPublicSignatureRequest(token: string) {
         placementWidth: request.document.placementWidth,
         placementHeight: request.document.placementHeight,
       },
-      savedSignatureAvailable: Boolean(request.client?.savedSignature),
+      savedSignatureAvailable: shouldOfferSavedSignature({
+        clientId: request.clientId,
+        savedSignatureId: request.client?.savedSignature?.id ?? null,
+      }),
+      canSaveSignatureForClient: Boolean(request.clientId),
     },
   };
 }
@@ -248,8 +253,18 @@ export async function submitPublicSignature(token: string, formData: FormData) {
     .set({ status: "SIGNED", signedAt, updatedAt: signedAt })
     .where(and(eq(signatureRequests.id, request.id), eq(signatureRequests.tokenHash, hashToken(token))));
 
+  const existingSavedSignature = request.client?.savedSignature;
+  if (useSavedSignature && existingSavedSignature) {
+    await db
+      .update(clientSavedSignatures)
+      .set({
+        lastUsedAt: signedAt,
+        updatedAt: signedAt,
+      })
+      .where(eq(clientSavedSignatures.id, existingSavedSignature.id));
+  }
+
   if (saveForClient && request.clientId && !useSavedSignature) {
-    const existingSavedSignature = request.client?.savedSignature;
     if (existingSavedSignature) {
       await db
         .update(clientSavedSignatures)

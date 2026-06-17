@@ -7,6 +7,7 @@ import { z } from "zod";
 import { db } from "../db";
 import { signatureDocuments, signatureEvents, signatureRequests } from "../db/schema";
 import { buildSignatureStoragePath, hashBufferSha256, SIGNATURE_BUCKET } from "../lib/signature-files";
+import { shouldOfferSavedSignature } from "../lib/client-saved-signatures";
 import type { SignatureRequestStatus } from "../lib/signature-status";
 import { createClient } from "../lib/supabase/server";
 import { logActivity } from "./activity-log";
@@ -211,7 +212,10 @@ export async function getSignatureFormOptions() {
       name: client.name,
       email: client.email,
       taxId: client.taxId,
-      hasSavedSignature: Boolean(client.savedSignature),
+      hasSavedSignature: shouldOfferSavedSignature({
+        clientId: client.id,
+        savedSignatureId: client.savedSignature?.id ?? null,
+      }),
     })),
     cases: caseRows.map((currentCase) => ({
       id: currentCase.id,
