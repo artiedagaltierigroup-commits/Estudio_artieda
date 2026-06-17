@@ -12,6 +12,7 @@ import {
 } from "@/lib/client-insights";
 import { normalizeClientMutationInput } from "@/lib/client-mutations";
 import { summarizeCaseCharges, summarizeClientCases } from "@/lib/detail-summaries";
+import { summarizeSignatureRequests } from "@/lib/signature-summaries";
 import { createClient } from "@/lib/supabase/server";
 import { deriveChargeStatus } from "@/lib/utils";
 
@@ -110,10 +111,25 @@ export async function getClient(id: string) {
       reminders: {
         orderBy: (reminder, { asc }) => [asc(reminder.reminderDate)],
       },
+      savedSignature: true,
     },
   });
 
   if (!client) return null;
+
+  const signatureRows = await db.query.signatureRequests.findMany({
+    where: (item, { and: andOperator, eq: eqOperator }) =>
+      andOperator(eqOperator(item.userId, userId), eqOperator(item.clientId, id)),
+    orderBy: (item, { desc }) => [desc(item.updatedAt)],
+    with: {
+      case: true,
+      document: true,
+      events: {
+        orderBy: (event, { desc }) => [desc(event.createdAt)],
+        limit: 1,
+      },
+    },
+  });
 
   const caseSummary = summarizeClientCases(client.cases);
   const financeSummary = summarizeClientFinance({
@@ -194,6 +210,12 @@ export async function getClient(id: string) {
     casesWithSummary,
     paymentTimeline,
     upcomingCharges,
+    signatureSummary: summarizeSignatureRequests(signatureRows),
+    recentSignatureRequests: signatureRows.slice(0, 5).map((request) => ({
+      ...request,
+      latestEvent: request.events[0] ?? null,
+    })),
+    hasSavedSignature: Boolean(client.savedSignature),
   };
 }
 

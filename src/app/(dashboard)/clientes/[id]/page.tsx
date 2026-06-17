@@ -12,6 +12,7 @@ import {
   getReminderPriorityTone,
 } from "@/lib/module-presenters";
 import { getCaseStatusTone, getChargeStatusTone, getNameInitials } from "@/lib/presentation";
+import { getSignatureStatusLabel, getSignatureStatusTone } from "@/lib/signature-status";
 import {
   formatDate,
   formatDateTime,
@@ -23,6 +24,7 @@ import {
   ArrowLeft,
   BellRing,
   Briefcase,
+  FileSignature,
   FileText,
   HandCoins,
   Mail,
@@ -186,6 +188,71 @@ export default async function ClienteDetailPage({ params }: { params: Promise<{ 
           </div>
         </SectionCard>
       </div>
+
+      <SectionCard
+        eyebrow="Centro de firmas"
+        title="Firmas del cliente"
+        description="Solicitudes recientes vinculadas a este cliente y estado de su firma guardada."
+        actions={
+          <Button asChild>
+            <Link href={`/firmas/nueva?clientId=${client.id}`}>
+              <FileSignature className="h-4 w-4" />
+              Nueva firma
+            </Link>
+          </Button>
+        }
+        contentClassName="p-0"
+      >
+        <div className="grid gap-3 border-b border-border/80 p-5 sm:grid-cols-4">
+          <div className="rounded-[20px] border border-border/70 bg-white/80 px-4 py-3 text-sm">
+            <p className="text-[0.72rem] uppercase tracking-[0.14em] text-muted-foreground">Total</p>
+            <p className="mt-1 font-semibold text-foreground">{client.signatureSummary.total}</p>
+          </div>
+          <div className="rounded-[20px] border border-border/70 bg-white/80 px-4 py-3 text-sm">
+            <p className="text-[0.72rem] uppercase tracking-[0.14em] text-muted-foreground">Pendientes</p>
+            <p className="mt-1 font-semibold text-[#775f22]">{client.signatureSummary.pending}</p>
+          </div>
+          <div className="rounded-[20px] border border-border/70 bg-white/80 px-4 py-3 text-sm">
+            <p className="text-[0.72rem] uppercase tracking-[0.14em] text-muted-foreground">Firmadas</p>
+            <p className="mt-1 font-semibold text-[#48745f]">{client.signatureSummary.signed}</p>
+          </div>
+          <div className="rounded-[20px] border border-border/70 bg-white/80 px-4 py-3 text-sm">
+            <p className="text-[0.72rem] uppercase tracking-[0.14em] text-muted-foreground">Firma guardada</p>
+            <p className="mt-1 font-semibold text-foreground">{client.hasSavedSignature ? "Disponible" : "Sin guardar"}</p>
+          </div>
+        </div>
+
+        {client.recentSignatureRequests.length === 0 ? (
+          <div className="px-6 py-8 text-sm text-muted-foreground">
+            Todavia no hay solicitudes de firma vinculadas a este cliente.
+          </div>
+        ) : (
+          <ul className="divide-y divide-border/80">
+            {client.recentSignatureRequests.map((request) => (
+              <li key={request.id}>
+                <Link
+                  href={`/firmas/${request.id}`}
+                  className="flex flex-col gap-3 px-6 py-4 transition-colors hover:bg-muted/25 md:flex-row md:items-start md:justify-between"
+                >
+                  <div>
+                    <p className="font-medium text-foreground">{request.subject}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {request.case?.title ?? "Sin caso asociado"} / {request.document?.originalFileName ?? "Documento pendiente"}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <StatusChip
+                      label={getSignatureStatusLabel(request.status)}
+                      tone={getSignatureStatusTone(request.status)}
+                    />
+                    <span className="text-xs text-muted-foreground">{formatDateTime(request.updatedAt)}</span>
+                  </div>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </SectionCard>
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]">
         {client.casesWithSummary.length === 0 ? (

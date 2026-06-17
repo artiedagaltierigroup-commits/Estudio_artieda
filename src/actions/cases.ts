@@ -6,6 +6,7 @@ import { z } from "zod";
 import { db } from "@/db";
 import { cases } from "@/db/schema";
 import { filterCasesByFilters, getCasePendingBalance, summarizeCaseFinance } from "@/lib/case-insights";
+import { summarizeSignatureRequests } from "@/lib/signature-summaries";
 import { createClient } from "@/lib/supabase/server";
 import { deriveChargeStatus } from "@/lib/utils";
 import { logActivity } from "./activity-log";
@@ -109,6 +110,20 @@ export async function getCase(id: string) {
 
   if (!currentCase) return null;
 
+  const signatureRows = await db.query.signatureRequests.findMany({
+    where: (item, { and: andOperator, eq: eqOperator }) =>
+      andOperator(eqOperator(item.userId, userId), eqOperator(item.caseId, id)),
+    orderBy: (item, { desc }) => [desc(item.updatedAt)],
+    with: {
+      client: true,
+      document: true,
+      events: {
+        orderBy: (event, { desc }) => [desc(event.createdAt)],
+        limit: 1,
+      },
+    },
+  });
+
   const financeSummary = summarizeCaseFinance(currentCase.charges);
   const paymentTimeline = currentCase.charges
     .flatMap((charge) =>
@@ -147,6 +162,11 @@ export async function getCase(id: string) {
     financeSummary,
     paymentTimeline,
     chargesWithDerivedStatus,
+    signatureSummary: summarizeSignatureRequests(signatureRows),
+    recentSignatureRequests: signatureRows.slice(0, 5).map((request) => ({
+      ...request,
+      latestEvent: request.events[0] ?? null,
+    })),
   };
 }
 
