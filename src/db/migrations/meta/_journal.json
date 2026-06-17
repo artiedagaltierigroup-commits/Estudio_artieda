@@ -57,6 +57,13 @@
       "when": 1781730276842,
       "tag": "0007_gigantic_shatterstar",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1781732343691,
+      "tag": "0008_tan_alice",
+      "breakpoints": true
     }
   ]
 }
