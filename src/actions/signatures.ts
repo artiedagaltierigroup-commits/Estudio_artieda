@@ -6,8 +6,9 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db } from "../db";
 import { signatureDocuments, signatureEvents, signatureRequests } from "../db/schema";
-import { buildSignatureStoragePath, hashBufferSha256, SIGNATURE_BUCKET } from "../lib/signature-files";
 import { shouldOfferSavedSignature } from "../lib/client-saved-signatures";
+import { buildEmailOpenUrl, buildSigningUrl, sendSignatureRequestEmail } from "../lib/signature-email";
+import { buildSignatureStoragePath, hashBufferSha256, SIGNATURE_BUCKET } from "../lib/signature-files";
 import type { SignatureRequestStatus } from "../lib/signature-status";
 import { createClient } from "../lib/supabase/server";
 import { logActivity } from "./activity-log";
@@ -68,11 +69,6 @@ function buildTokenExpiration(now = new Date()) {
   return expiresAt;
 }
 
-function buildSigningUrl(token: string) {
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
-  return `${baseUrl.replace(/\/$/, "")}/firmar/${token}`;
-}
-
 async function getUserId(): Promise<string> {
   const supabase = await createClient();
   const {
@@ -117,15 +113,6 @@ async function getOwnedSignatureRequest(id: string, userId: string) {
       },
     },
   });
-}
-
-async function sendSignatureEmail(params: {
-  to: string;
-  subject: string;
-  message?: string | null;
-  signingUrl: string;
-}) {
-  console.info("Signature email pending provider", params);
 }
 
 export async function getSignatureRequests(filters?: {
@@ -421,11 +408,12 @@ async function sendOrResendSignatureRequest(requestId: string, eventType: "sent"
     .where(and(eq(signatureRequests.id, requestId), eq(signatureRequests.userId, userId)));
 
   const signingUrl = buildSigningUrl(token);
-  await sendSignatureEmail({
+  await sendSignatureRequestEmail({
     to: request.recipientEmail,
     subject: request.subject,
     message: request.message,
     signingUrl,
+    emailOpenUrl: buildEmailOpenUrl(token),
   });
 
   await logSignatureEvent({
