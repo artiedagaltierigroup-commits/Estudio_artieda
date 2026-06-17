@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildDefaultSignatureSubject, normalizeSignatureEmail } from "./signatures";
+import { buildDefaultSignatureSubject, normalizeSignatureEmail } from "./signatures-helpers";
 
 describe("signature action helpers", () => {
   it("builds a clear default subject", () => {

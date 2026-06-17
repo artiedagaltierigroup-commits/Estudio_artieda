@@ -10,6 +10,7 @@ import { buildSignatureStoragePath, hashBufferSha256, SIGNATURE_BUCKET } from ".
 import type { SignatureRequestStatus } from "../lib/signature-status";
 import { createClient } from "../lib/supabase/server";
 import { logActivity } from "./activity-log";
+import { normalizeSignatureEmail } from "./signatures-helpers";
 
 const DEFAULT_EXPIRATION_DAYS = 15;
 
@@ -69,15 +70,6 @@ function buildTokenExpiration(now = new Date()) {
 function buildSigningUrl(token: string) {
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
   return `${baseUrl.replace(/\/$/, "")}/firmar/${token}`;
-}
-
-export function normalizeSignatureEmail(email: string) {
-  return email.trim().toLowerCase();
-}
-
-export function buildDefaultSignatureSubject(fileName: string) {
-  const cleanName = fileName.replace(/\.pdf$/i, "");
-  return `Solicitud de firma: ${cleanName}`;
 }
 
 async function getUserId(): Promise<string> {
