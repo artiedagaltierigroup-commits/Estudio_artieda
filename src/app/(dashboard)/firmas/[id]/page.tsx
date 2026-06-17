@@ -61,7 +61,13 @@ export default async function FirmaDetallePage({ params }: { params: Promise<{ i
         title="Gestion de solicitud"
         description="Las acciones disponibles cambian segun el estado actual."
       >
-        <SignatureRequestActions requestId={request.id} status={request.status} />
+        <SignatureRequestActions
+          requestId={request.id}
+          status={request.status}
+          signedDocumentAvailable={Boolean(request.document?.signedStoragePath)}
+          signatureImageAvailable={Boolean(request.document?.signatureStoragePath)}
+          certificateAvailable={Boolean(request.document?.signedSha256)}
+        />
       </SectionCard>
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]">

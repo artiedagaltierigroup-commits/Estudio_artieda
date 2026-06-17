@@ -9,6 +9,9 @@ import { Ban, Copy, Download, RotateCw, Send } from "lucide-react";
 interface SignatureRequestActionsProps {
   requestId: string;
   status: string;
+  signedDocumentAvailable?: boolean;
+  signatureImageAvailable?: boolean;
+  certificateAvailable?: boolean;
 }
 
 function canSend(status: string) {
@@ -30,7 +33,13 @@ function canCancel(status: string) {
   return !["SIGNED", "CANCELLED", "REJECTED", "EXPIRED"].includes(status);
 }
 
-export function SignatureRequestActions({ requestId, status }: SignatureRequestActionsProps) {
+export function SignatureRequestActions({
+  requestId,
+  status,
+  signedDocumentAvailable = false,
+  signatureImageAvailable = false,
+  certificateAvailable = false,
+}: SignatureRequestActionsProps) {
   async function sendAction() {
     "use server";
     await sendSignatureRequest(requestId);
@@ -68,24 +77,45 @@ export function SignatureRequestActions({ requestId, status }: SignatureRequestA
 
       {status === "SIGNED" ? (
         <>
-          <Button asChild variant="outline">
-            <a href={`/api/signatures/${requestId}/signed-document`}>
+          {signedDocumentAvailable ? (
+            <Button asChild variant="outline">
+              <a href={`/api/signatures/${requestId}/signed-document`}>
+                <Download className="h-4 w-4" />
+                PDF firmado
+              </a>
+            </Button>
+          ) : (
+            <Button type="button" variant="outline" disabled>
               <Download className="h-4 w-4" />
-              PDF firmado
-            </a>
-          </Button>
-          <Button asChild variant="outline">
-            <a href={`/api/signatures/${requestId}/signature-image`}>
+              PDF generandose
+            </Button>
+          )}
+          {signatureImageAvailable ? (
+            <Button asChild variant="outline">
+              <a href={`/api/signatures/${requestId}/signature-image`}>
+                <Download className="h-4 w-4" />
+                Firma
+              </a>
+            </Button>
+          ) : (
+            <Button type="button" variant="outline" disabled>
               <Download className="h-4 w-4" />
-              Firma
-            </a>
-          </Button>
-          <Button asChild variant="outline">
-            <a href={`/api/signatures/${requestId}/certificate`}>
+              Firma pendiente
+            </Button>
+          )}
+          {certificateAvailable ? (
+            <Button asChild variant="outline">
+              <a href={`/api/signatures/${requestId}/certificate`}>
+                <Download className="h-4 w-4" />
+                Constancia
+              </a>
+            </Button>
+          ) : (
+            <Button type="button" variant="outline" disabled>
               <Download className="h-4 w-4" />
-              Constancia
-            </a>
-          </Button>
+              Constancia pendiente
+            </Button>
+          )}
         </>
       ) : null}
 

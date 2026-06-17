@@ -52,13 +52,16 @@ export function PdfUploadField({ fileName, fileSize, error, onFileChange }: PdfU
       </div>
 
       {fileName ? (
-        <div className="flex items-center gap-3 rounded-[24px] border border-border/70 bg-white/85 px-4 py-3 text-sm">
+        <div
+          className="flex items-center gap-3 rounded-[24px] border border-[#b8d8c5] bg-[#f4fbf6] px-4 py-3 text-sm"
+          aria-live="polite"
+        >
           <span className="flex h-10 w-10 items-center justify-center rounded-[18px] bg-primary/10 text-primary">
             <FileText className="h-4 w-4" />
           </span>
           <div>
             <p className="font-medium text-foreground">{fileName}</p>
-            <p className="text-xs text-muted-foreground">{fileSize}</p>
+            <p className="text-xs text-muted-foreground">{fileSize} / Listo para subir al crear la solicitud</p>
           </div>
         </div>
       ) : (

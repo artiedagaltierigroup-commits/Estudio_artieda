@@ -109,7 +109,9 @@ export function PublicSignaturePad({
       <div className="flex items-center justify-between gap-3">
         <div>
           <p className="text-sm font-semibold text-foreground">Tu firma</p>
-          <p className="text-xs text-muted-foreground">Dibuja dentro del recuadro y confirma cuando estes conforme.</p>
+          <p id="signature-pad-help" className="text-xs text-muted-foreground">
+            Dibuja dentro del recuadro y confirma cuando estes conforme.
+          </p>
         </div>
         <PenLine className="h-5 w-5 text-primary" />
       </div>
@@ -119,6 +121,7 @@ export function PublicSignaturePad({
           <Button
             type="button"
             variant={useSavedSignature ? "default" : "outline"}
+            aria-pressed={useSavedSignature}
             onClick={() => {
               setUseSavedSignature(true);
               setSaveForClient(false);
@@ -129,6 +132,7 @@ export function PublicSignaturePad({
           <Button
             type="button"
             variant={!useSavedSignature ? "default" : "outline"}
+            aria-pressed={!useSavedSignature}
             onClick={() => setUseSavedSignature(false)}
           >
             Dibujar nueva firma
@@ -142,7 +146,12 @@ export function PublicSignaturePad({
             Se reutilizara tu firma guardada al confirmar.
           </div>
         ) : (
-          <canvas ref={canvasRef} className="block aspect-[5/2] w-full rounded-[20px] bg-white touch-none" />
+          <canvas
+            ref={canvasRef}
+            aria-describedby="signature-pad-help"
+            aria-label="Area para dibujar la firma electronica"
+            className="block aspect-[5/2] w-full rounded-[20px] bg-white touch-none"
+          />
         )}
       </div>
 
