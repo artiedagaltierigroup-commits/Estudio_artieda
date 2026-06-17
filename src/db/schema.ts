@@ -484,10 +484,14 @@ export const signatureEvents = pgTable(
   })
 );
 
-export const clientsRelations = relations(clients, ({ many }) => ({
+export const clientsRelations = relations(clients, ({ many, one }) => ({
   cases: many(cases),
   reminders: many(reminders),
   signatureRequests: many(signatureRequests),
+  savedSignature: one(clientSavedSignatures, {
+    fields: [clients.id],
+    references: [clientSavedSignatures.clientId],
+  }),
 }));
 
 export const casesRelations = relations(cases, ({ many, one }) => ({
