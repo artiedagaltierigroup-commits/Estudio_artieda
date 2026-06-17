@@ -23,6 +23,17 @@ export function buildSignatureStoragePath(params: BuildPathParams) {
   return `${params.userId}/signature-requests/${params.requestId}/${params.kind}/${sanitizeFileName(params.fileName)}`;
 }
 
+export function buildSignedDocumentRetention(params: {
+  originalStoragePath: string;
+  signedStoragePath: string;
+}) {
+  return {
+    originalStoragePath: params.signedStoragePath,
+    storagePathsToDelete:
+      params.originalStoragePath === params.signedStoragePath ? [] : [params.originalStoragePath],
+  };
+}
+
 export async function hashBufferSha256(buffer: Buffer) {
   return createHash("sha256").update(buffer).digest("hex");
 }

@@ -8,7 +8,12 @@ import { db } from "../db";
 import { clientSavedSignatures, signatureDocuments, signatureEvents, signatureRequests } from "../db/schema";
 import { shouldOfferSavedSignature } from "../lib/client-saved-signatures";
 import { isSignatureRequestExpired } from "../lib/signature-expiration";
-import { buildSignatureStoragePath, hashBufferSha256, SIGNATURE_BUCKET } from "../lib/signature-files";
+import {
+  buildSignatureStoragePath,
+  buildSignedDocumentRetention,
+  hashBufferSha256,
+  SIGNATURE_BUCKET,
+} from "../lib/signature-files";
 import { embedSignatureInPdf } from "../lib/signature-pdf";
 import { createClient } from "../lib/supabase/server";
 
@@ -249,9 +254,21 @@ export async function submitPublicSignature(token: string, formData: FormData) {
     });
   if (signedUpload.error) return { error: signedUpload.error.message };
 
+  const signedRetention = buildSignedDocumentRetention({
+    originalStoragePath: request.document.originalStoragePath,
+    signedStoragePath,
+  });
+  if (signedRetention.storagePathsToDelete.length > 0) {
+    const removal = await supabase.storage.from(SIGNATURE_BUCKET).remove(signedRetention.storagePathsToDelete);
+    if (removal.error) {
+      console.warn("Could not remove original signature PDF after signing", removal.error);
+    }
+  }
+
   await db
     .update(signatureDocuments)
     .set({
+      originalStoragePath: signedRetention.originalStoragePath,
       signatureStoragePath,
       signatureSha256,
       signedStoragePath,
