@@ -7,6 +7,7 @@ import { revalidatePath } from "next/cache";
 import { db } from "../db";
 import { clientSavedSignatures, signatureDocuments, signatureEvents, signatureRequests } from "../db/schema";
 import { shouldOfferSavedSignature } from "../lib/client-saved-signatures";
+import { isSignatureRequestExpired } from "../lib/signature-expiration";
 import { buildSignatureStoragePath, hashBufferSha256, SIGNATURE_BUCKET } from "../lib/signature-files";
 import { embedSignatureInPdf } from "../lib/signature-pdf";
 import { createClient } from "../lib/supabase/server";
@@ -27,10 +28,6 @@ function isTerminalStatus(status: string) {
   return ["SIGNED", "REJECTED", "EXPIRED", "CANCELLED"].includes(status);
 }
 
-function isExpired(expiresAt: Date, now = new Date()) {
-  return expiresAt.getTime() <= now.getTime();
-}
-
 async function getRequestByToken(token: string) {
   return db.query.signatureRequests.findFirst({
     where: (item, { eq: eqOperator }) => eqOperator(item.tokenHash, hashToken(token)),
@@ -45,6 +42,21 @@ async function getRequestByToken(token: string) {
         orderBy: (event, { desc }) => [desc(event.createdAt)],
       },
     },
+  });
+}
+
+async function expirePublicRequest(request: NonNullable<Awaited<ReturnType<typeof getRequestByToken>>>) {
+  const now = new Date();
+  await db
+    .update(signatureRequests)
+    .set({ status: "EXPIRED", updatedAt: now })
+    .where(eq(signatureRequests.id, request.id));
+
+  await db.insert(signatureEvents).values({
+    userId: request.userId,
+    signatureRequestId: request.id,
+    type: "expired",
+    metadata: { tokenExpiresAt: request.tokenExpiresAt },
   });
 }
 
@@ -89,11 +101,8 @@ export async function getPublicSignatureRequest(token: string) {
   const request = await getRequestByToken(token);
   if (!request) return { error: "Solicitud no encontrada" };
 
-  if (isExpired(request.tokenExpiresAt) && !isTerminalStatus(request.status)) {
-    await db
-      .update(signatureRequests)
-      .set({ status: "EXPIRED", updatedAt: new Date() })
-      .where(eq(signatureRequests.id, request.id));
+  if (isSignatureRequestExpired(request)) {
+    await expirePublicRequest(request);
     return { error: "Esta solicitud de firma vencio. Pedi al estudio que vuelva a enviarla." };
   }
 
@@ -160,7 +169,10 @@ export async function submitPublicSignature(token: string, formData: FormData) {
   const request = await getRequestByToken(token);
   if (!request) return { error: "Solicitud no encontrada" };
   if (isTerminalStatus(request.status)) return { error: "Esta solicitud ya no puede firmarse." };
-  if (isExpired(request.tokenExpiresAt)) return { error: "Esta solicitud vencio." };
+  if (isSignatureRequestExpired(request)) {
+    await expirePublicRequest(request);
+    return { error: "Esta solicitud vencio." };
+  }
   if (!request.document) return { error: "La solicitud no tiene documento disponible." };
 
   const consent = formData.get("consent") === "on";
