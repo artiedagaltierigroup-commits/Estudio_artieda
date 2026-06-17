@@ -21,8 +21,27 @@ interface CalendarEventLike {
 }
 
 interface ActivityLike {
-  entityType: "case" | "charge" | "payment" | "expense" | "reminder" | "savings_goal" | "savings_contribution";
-  action: "created" | "updated" | "deleted" | "status_changed" | "due_date_changed";
+  entityType:
+    | "case"
+    | "charge"
+    | "document"
+    | "payment"
+    | "expense"
+    | "reminder"
+    | "savings_goal"
+    | "savings_contribution"
+    | "signature_request";
+  action:
+    | "created"
+    | "updated"
+    | "deleted"
+    | "status_changed"
+    | "due_date_changed"
+    | "sent"
+    | "signed"
+    | "resent"
+    | "cancelled"
+    | "downloaded";
   note?: string | null;
   previousValue?: unknown;
   newValue?: unknown;
@@ -165,6 +184,11 @@ export function summarizeActivityMetrics(entries: Pick<ActivityLike, "action" | 
     deleted: 0,
     status_changed: 0,
     due_date_changed: 0,
+    sent: 0,
+    signed: 0,
+    resent: 0,
+    cancelled: 0,
+    downloaded: 0,
   };
 
   const entities = {
@@ -175,6 +199,8 @@ export function summarizeActivityMetrics(entries: Pick<ActivityLike, "action" | 
     reminder: 0,
     savings_goal: 0,
     savings_contribution: 0,
+    document: 0,
+    signature_request: 0,
   };
 
   for (const entry of entries) {

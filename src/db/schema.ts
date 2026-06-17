@@ -30,14 +30,47 @@ export const recurringExpenseOccurrenceStatusEnum = pgEnum("recurring_expense_oc
 ]);
 export const expenseOriginEnum = pgEnum("expense_origin", ["MANUAL", "RECURRING_AUTOMATIC", "RECURRING_PAYABLE", "SAVINGS"]);
 export const savingsGoalStatusEnum = pgEnum("savings_goal_status", ["IN_PROGRESS", "PAUSED"]);
+export const signatureRequestStatusEnum = pgEnum("signature_request_status", [
+  "DRAFT",
+  "READY",
+  "SENT",
+  "EMAIL_OPENED",
+  "LINK_OPENED",
+  "DOCUMENT_VIEWED",
+  "SIGNING_STARTED",
+  "SIGNING_INTERRUPTED",
+  "SIGNED",
+  "REJECTED",
+  "EXPIRED",
+  "CANCELLED",
+]);
+export const signatureEventTypeEnum = pgEnum("signature_event_type", [
+  "created",
+  "document_uploaded",
+  "placement_selected",
+  "sent",
+  "email_opened",
+  "link_opened",
+  "document_viewed",
+  "signing_started",
+  "signing_interrupted",
+  "signed",
+  "rejected",
+  "expired",
+  "cancelled",
+  "resent",
+  "downloaded",
+]);
 export const entityTypeEnum = pgEnum("entity_type", [
   "case",
   "charge",
+  "document",
   "payment",
   "expense",
   "reminder",
   "savings_goal",
   "savings_contribution",
+  "signature_request",
 ]);
 export const actionTypeEnum = pgEnum("action_type", [
   "created",
@@ -45,6 +78,11 @@ export const actionTypeEnum = pgEnum("action_type", [
   "deleted",
   "status_changed",
   "due_date_changed",
+  "sent",
+  "signed",
+  "resent",
+  "cancelled",
+  "downloaded",
 ]);
 
 export const clients = pgTable(
@@ -343,15 +381,120 @@ export const activityLog = pgTable(
   })
 );
 
+export const signatureRequests = pgTable(
+  "signature_requests",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id").notNull(),
+    clientId: uuid("client_id").references(() => clients.id, { onDelete: "set null" }),
+    caseId: uuid("case_id").references(() => cases.id, { onDelete: "set null" }),
+    subject: text("subject").notNull(),
+    message: text("message"),
+    recipientName: text("recipient_name"),
+    recipientEmail: text("recipient_email").notNull(),
+    recipientTaxId: text("recipient_tax_id"),
+    status: signatureRequestStatusEnum("status").notNull().default("DRAFT"),
+    tokenHash: text("token_hash").notNull(),
+    tokenExpiresAt: timestamp("token_expires_at", { withTimezone: true }).notNull(),
+    sentAt: timestamp("sent_at", { withTimezone: true }),
+    signedAt: timestamp("signed_at", { withTimezone: true }),
+    cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+    rejectedAt: timestamp("rejected_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    userIdIdx: index("signature_requests_user_id_idx").on(table.userId),
+    clientIdx: index("signature_requests_client_id_idx").on(table.clientId),
+    caseIdx: index("signature_requests_case_id_idx").on(table.caseId),
+    statusIdx: index("signature_requests_status_idx").on(table.userId, table.status),
+    recipientEmailIdx: index("signature_requests_recipient_email_idx").on(table.recipientEmail),
+    tokenHashIdx: uniqueIndex("signature_requests_token_hash_idx").on(table.tokenHash),
+  })
+);
+
+export const signatureDocuments = pgTable(
+  "signature_documents",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id").notNull(),
+    signatureRequestId: uuid("signature_request_id")
+      .notNull()
+      .references(() => signatureRequests.id, { onDelete: "cascade" }),
+    originalFileName: text("original_file_name").notNull(),
+    originalStoragePath: text("original_storage_path").notNull(),
+    signedStoragePath: text("signed_storage_path"),
+    originalSha256: text("original_sha256").notNull(),
+    signedSha256: text("signed_sha256"),
+    pageNumber: integer("page_number").notNull().default(1),
+    placementX: decimal("placement_x", { precision: 10, scale: 4 }).notNull(),
+    placementY: decimal("placement_y", { precision: 10, scale: 4 }).notNull(),
+    placementWidth: decimal("placement_width", { precision: 10, scale: 4 }).notNull(),
+    placementHeight: decimal("placement_height", { precision: 10, scale: 4 }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    userIdIdx: index("signature_documents_user_id_idx").on(table.userId),
+    requestIdx: uniqueIndex("signature_documents_request_id_idx").on(table.signatureRequestId),
+  })
+);
+
+export const clientSavedSignatures = pgTable(
+  "client_saved_signatures",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id").notNull(),
+    clientId: uuid("client_id")
+      .notNull()
+      .references(() => clients.id, { onDelete: "cascade" }),
+    signerName: text("signer_name"),
+    signerEmail: text("signer_email"),
+    storagePath: text("storage_path").notNull(),
+    sha256: text("sha256").notNull(),
+    consentedAt: timestamp("consented_at", { withTimezone: true }).notNull(),
+    lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    userIdIdx: index("client_saved_signatures_user_id_idx").on(table.userId),
+    clientIdx: uniqueIndex("client_saved_signatures_client_id_idx").on(table.clientId),
+  })
+);
+
+export const signatureEvents = pgTable(
+  "signature_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id").notNull(),
+    signatureRequestId: uuid("signature_request_id")
+      .notNull()
+      .references(() => signatureRequests.id, { onDelete: "cascade" }),
+    type: signatureEventTypeEnum("type").notNull(),
+    metadata: jsonb("metadata"),
+    ipAddress: text("ip_address"),
+    userAgent: text("user_agent"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    userIdIdx: index("signature_events_user_id_idx").on(table.userId),
+    requestIdx: index("signature_events_request_id_idx").on(table.signatureRequestId),
+    createdAtIdx: index("signature_events_created_at_idx").on(table.signatureRequestId, table.createdAt),
+  })
+);
+
 export const clientsRelations = relations(clients, ({ many }) => ({
   cases: many(cases),
   reminders: many(reminders),
+  signatureRequests: many(signatureRequests),
 }));
 
 export const casesRelations = relations(cases, ({ many, one }) => ({
   client: one(clients, { fields: [cases.clientId], references: [clients.id] }),
   charges: many(charges),
   reminders: many(reminders),
+  signatureRequests: many(signatureRequests),
 }));
 
 export const chargesRelations = relations(charges, ({ many, one }) => ({
@@ -380,4 +523,32 @@ export const savingsContributionsRelations = relations(savingsContributions, ({ 
 export const remindersRelations = relations(reminders, ({ one }) => ({
   case: one(cases, { fields: [reminders.caseId], references: [cases.id] }),
   client: one(clients, { fields: [reminders.clientId], references: [clients.id] }),
+}));
+
+export const signatureRequestsRelations = relations(signatureRequests, ({ many, one }) => ({
+  client: one(clients, { fields: [signatureRequests.clientId], references: [clients.id] }),
+  case: one(cases, { fields: [signatureRequests.caseId], references: [cases.id] }),
+  document: one(signatureDocuments, {
+    fields: [signatureRequests.id],
+    references: [signatureDocuments.signatureRequestId],
+  }),
+  events: many(signatureEvents),
+}));
+
+export const signatureDocumentsRelations = relations(signatureDocuments, ({ one }) => ({
+  request: one(signatureRequests, {
+    fields: [signatureDocuments.signatureRequestId],
+    references: [signatureRequests.id],
+  }),
+}));
+
+export const clientSavedSignaturesRelations = relations(clientSavedSignatures, ({ one }) => ({
+  client: one(clients, { fields: [clientSavedSignatures.clientId], references: [clients.id] }),
+}));
+
+export const signatureEventsRelations = relations(signatureEvents, ({ one }) => ({
+  request: one(signatureRequests, {
+    fields: [signatureEvents.signatureRequestId],
+    references: [signatureRequests.id],
+  }),
 }));

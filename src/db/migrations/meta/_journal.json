@@ -50,6 +50,13 @@
       "when": 1777662085365,
       "tag": "0006_public_trauma",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1781730276842,
+      "tag": "0007_gigantic_shatterstar",
+      "breakpoints": true
     }
   ]
 }

@@ -46,6 +46,11 @@ export function getActivityActionLabel(action: string): string {
     deleted: "Eliminado",
     status_changed: "Estado cambiado",
     due_date_changed: "Vencimiento cambiado",
+    sent: "Enviado",
+    signed: "Firmado",
+    resent: "Reenviado",
+    cancelled: "Cancelado",
+    downloaded: "Descargado",
   };
 
   return labels[action] ?? action;
@@ -58,8 +63,10 @@ export function getActivityEntityLabel(entityType: string): string {
     payment: "Pago",
     expense: "Gasto",
     reminder: "Recordatorio",
+    document: "Documento",
     savings_goal: "Ahorro",
     savings_contribution: "Aporte de ahorro",
+    signature_request: "Solicitud de firma",
   };
 
   return labels[entityType] ?? entityType;

@@ -128,6 +128,11 @@ describe("summarizeActivityMetrics", () => {
       deleted: 1,
       status_changed: 0,
       due_date_changed: 0,
+      sent: 0,
+      signed: 0,
+      resent: 0,
+      cancelled: 0,
+      downloaded: 0,
     });
     expect(summary.entities.charge).toBe(2);
   });
@@ -140,5 +145,19 @@ describe("summarizeActivityMetrics", () => {
 
     expect(summary.actions.status_changed).toBe(1);
     expect(summary.actions.due_date_changed).toBe(1);
+  });
+
+  it("counts signature actions and entities", () => {
+    const summary = summarizeActivityMetrics([
+      { action: "sent", entityType: "signature_request" },
+      { action: "signed", entityType: "signature_request" },
+      { action: "downloaded", entityType: "document" },
+    ]);
+
+    expect(summary.actions.sent).toBe(1);
+    expect(summary.actions.signed).toBe(1);
+    expect(summary.actions.downloaded).toBe(1);
+    expect(summary.entities.signature_request).toBe(2);
+    expect(summary.entities.document).toBe(1);
   });
 });
