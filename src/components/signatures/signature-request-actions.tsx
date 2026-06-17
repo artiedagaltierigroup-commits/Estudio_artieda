@@ -80,6 +80,12 @@ export function SignatureRequestActions({ requestId, status }: SignatureRequestA
               Firma
             </a>
           </Button>
+          <Button asChild variant="outline">
+            <a href={`/api/signatures/${requestId}/certificate`}>
+              <Download className="h-4 w-4" />
+              Constancia
+            </a>
+          </Button>
         </>
       ) : null}
 
