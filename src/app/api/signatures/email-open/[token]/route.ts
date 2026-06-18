@@ -1,6 +1,7 @@
 import { createHash } from "crypto";
 import { db } from "@/db";
-import { signatureEvents, signatureRequests } from "@/db/schema";
+import { signatureEvents, signatureRecipients, signatureRequests } from "@/db/schema";
+import { getAggregateSignatureStatus } from "@/lib/signature-recipients";
 import { eq } from "drizzle-orm";
 
 const transparentPng = Buffer.from(
@@ -16,23 +17,40 @@ function canMarkEmailOpened(status: string) {
   return !["SIGNED", "REJECTED", "EXPIRED", "CANCELLED"].includes(status);
 }
 
-export async function GET(_request: Request, { params }: { params: Promise<{ token: string }> }) {
-  const { token } = await params;
-  const request = await db.query.signatureRequests.findFirst({
-    where: (item, { eq: eqOperator }) => eqOperator(item.tokenHash, hashToken(token)),
+async function updateRequestAggregateStatus(requestId: string) {
+  const recipients = await db.query.signatureRecipients.findMany({
+    where: (recipient, { eq: eqOperator }) => eqOperator(recipient.signatureRequestId, requestId),
   });
 
-  if (request && canMarkEmailOpened(request.status)) {
+  await db
+    .update(signatureRequests)
+    .set({ status: getAggregateSignatureStatus(recipients), updatedAt: new Date() })
+    .where(eq(signatureRequests.id, requestId));
+}
+
+export async function GET(_request: Request, { params }: { params: Promise<{ token: string }> }) {
+  const { token } = await params;
+  const recipient = await db.query.signatureRecipients.findFirst({
+    where: (item, { eq: eqOperator }) => eqOperator(item.tokenHash, hashToken(token)),
+    with: {
+      request: true,
+    },
+  });
+
+  if (recipient && canMarkEmailOpened(recipient.status) && canMarkEmailOpened(recipient.request.status)) {
     await db.insert(signatureEvents).values({
-      userId: request.userId,
-      signatureRequestId: request.id,
+      userId: recipient.userId,
+      signatureRequestId: recipient.signatureRequestId,
+      signatureRecipientId: recipient.id,
       type: "email_opened",
     });
 
     await db
-      .update(signatureRequests)
+      .update(signatureRecipients)
       .set({ status: "EMAIL_OPENED", updatedAt: new Date() })
-      .where(eq(signatureRequests.id, request.id));
+      .where(eq(signatureRecipients.id, recipient.id));
+
+    await updateRequestAggregateStatus(recipient.signatureRequestId);
   }
 
   return new Response(transparentPng, {

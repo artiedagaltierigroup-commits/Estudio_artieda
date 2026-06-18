@@ -9,7 +9,15 @@ interface SendSignatureRequestEmailParams extends SignatureEmailContentParams {
   to: string;
 }
 
-const ctaLabel = "Revisar y firmar documento";
+interface BuildRecipientSignatureEmailParams {
+  recipientEmail: string;
+  subject: string;
+  message?: string | null;
+  token: string;
+  baseUrl?: string;
+}
+
+const ctaLabel = "Firmar solicitud";
 
 function escapeHtml(value: string) {
   return value
@@ -26,6 +34,16 @@ export function buildSigningUrl(token: string, baseUrl = process.env.NEXT_PUBLIC
 
 export function buildEmailOpenUrl(token: string, baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000") {
   return `${baseUrl.replace(/\/$/, "")}/api/signatures/email-open/${token}`;
+}
+
+export function buildRecipientSignatureEmail(params: BuildRecipientSignatureEmailParams): SendSignatureRequestEmailParams {
+  return {
+    to: params.recipientEmail,
+    subject: params.subject,
+    message: params.message,
+    signingUrl: buildSigningUrl(params.token, params.baseUrl),
+    emailOpenUrl: buildEmailOpenUrl(params.token, params.baseUrl),
+  };
 }
 
 export function buildEmailText(params: SignatureEmailContentParams) {

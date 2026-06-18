@@ -13,7 +13,7 @@ import {
   signatureRequests,
 } from "../db/schema";
 import { shouldOfferSavedSignature } from "../lib/client-saved-signatures";
-import { buildEmailOpenUrl, buildSigningUrl, sendSignatureRequestEmail } from "../lib/signature-email";
+import { buildRecipientSignatureEmail, sendSignatureRequestEmail } from "../lib/signature-email";
 import { buildSignatureStoragePath, hashBufferSha256, SIGNATURE_BUCKET } from "../lib/signature-files";
 import type { SignatureRequestStatus } from "../lib/signature-status";
 import { createClient } from "../lib/supabase/server";
@@ -492,8 +492,12 @@ async function sendOrResendSignatureRequest(requestId: string, eventType: "sent"
       recipient,
       token,
       tokenHash: hashToken(token),
-      signingUrl: buildSigningUrl(token),
-      emailOpenUrl: buildEmailOpenUrl(token),
+      email: buildRecipientSignatureEmail({
+        recipientEmail: recipient.email,
+        subject: request.subject,
+        message: request.message,
+        token,
+      }),
     };
   });
   const primaryPayload = recipientPayloads[0];
@@ -522,11 +526,7 @@ async function sendOrResendSignatureRequest(requestId: string, eventType: "sent"
       .where(and(eq(signatureRecipients.id, payload.recipient.id), eq(signatureRecipients.userId, userId)));
 
     await sendSignatureRequestEmail({
-      to: payload.recipient.email,
-      subject: request.subject,
-      message: request.message,
-      signingUrl: payload.signingUrl,
-      emailOpenUrl: payload.emailOpenUrl,
+      ...payload.email,
     });
 
     await logSignatureEvent({
@@ -559,11 +559,11 @@ async function sendOrResendSignatureRequest(requestId: string, eventType: "sent"
   revalidateSignaturePaths(request);
   return {
     success: true,
-    signingUrl: primaryPayload.signingUrl,
+    signingUrl: primaryPayload.email.signingUrl,
     signingUrls: recipientPayloads.map((payload) => ({
       recipientId: payload.recipient.id,
       email: payload.recipient.email,
-      signingUrl: payload.signingUrl,
+      signingUrl: payload.email.signingUrl,
     })),
   };
 }
@@ -595,7 +595,12 @@ export async function resendSignatureRecipient(requestId: string, recipientId: s
   const token = buildToken();
   const tokenHash = hashToken(token);
   const tokenExpiresAt = buildTokenExpiration(now);
-  const signingUrl = buildSigningUrl(token);
+  const email = buildRecipientSignatureEmail({
+    recipientEmail: recipient.email,
+    subject: request.subject,
+    message: request.message,
+    token,
+  });
 
   await db
     .update(signatureRecipients)
@@ -614,11 +619,7 @@ export async function resendSignatureRecipient(requestId: string, recipientId: s
     .where(and(eq(signatureRequests.id, requestId), eq(signatureRequests.userId, userId)));
 
   await sendSignatureRequestEmail({
-    to: recipient.email,
-    subject: request.subject,
-    message: request.message,
-    signingUrl,
-    emailOpenUrl: buildEmailOpenUrl(token),
+    ...email,
   });
 
   await logSignatureEvent({
@@ -638,7 +639,7 @@ export async function resendSignatureRecipient(requestId: string, recipientId: s
   });
 
   revalidateSignaturePaths(request);
-  return { success: true, signingUrl };
+  return { success: true, signingUrl: email.signingUrl };
 }
 
 export async function cancelSignatureRequest(requestId: string) {
