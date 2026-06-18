@@ -38,6 +38,14 @@ import {
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+function getSignatureProgress(request: { recipients?: Array<{ status: string }> }) {
+  const recipients = request.recipients ?? [];
+  return {
+    signed: recipients.filter((recipient) => recipient.status === "SIGNED").length,
+    total: recipients.length || 1,
+  };
+}
+
 export default async function ClienteDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const client = await getClient(id);
@@ -217,8 +225,10 @@ export default async function ClienteDetailPage({ params }: { params: Promise<{ 
             <p className="mt-1 font-semibold text-[#48745f]">{client.signatureSummary.signed}</p>
           </div>
           <div className="rounded-[20px] border border-border/70 bg-white/80 px-4 py-3 text-sm">
-            <p className="text-[0.72rem] uppercase tracking-[0.14em] text-muted-foreground">Firma guardada</p>
-            <p className="mt-1 font-semibold text-foreground">{client.hasSavedSignature ? "Disponible" : "Sin guardar"}</p>
+            <p className="text-[0.72rem] uppercase tracking-[0.14em] text-muted-foreground">Firmantes</p>
+            <p className="mt-1 font-semibold text-foreground">
+              {client.signatureSummary.signedRecipients}/{client.signatureSummary.recipients}
+            </p>
           </div>
         </div>
 
@@ -237,7 +247,8 @@ export default async function ClienteDetailPage({ params }: { params: Promise<{ 
                   <div>
                     <p className="font-medium text-foreground">{request.subject}</p>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      {request.case?.title ?? "Sin caso asociado"} / {request.document?.originalFileName ?? "Documento pendiente"}
+                      {request.case?.title ?? "Sin caso asociado"} / {getSignatureProgress(request).signed} de{" "}
+                      {getSignatureProgress(request).total} firmantes
                     </p>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">

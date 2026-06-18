@@ -117,6 +117,9 @@ export async function getCase(id: string) {
     with: {
       client: true,
       document: true,
+      recipients: {
+        orderBy: (recipient, { asc }) => [asc(recipient.sortOrder)],
+      },
       events: {
         orderBy: (event, { desc }) => [desc(event.createdAt)],
         limit: 1,

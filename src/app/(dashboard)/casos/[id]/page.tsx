@@ -39,6 +39,14 @@ function getPriorityTone(priority: string) {
   }
 }
 
+function getSignatureProgress(request: { recipients?: Array<{ status: string }> }) {
+  const recipients = request.recipients ?? [];
+  return {
+    signed: recipients.filter((recipient) => recipient.status === "SIGNED").length,
+    total: recipients.length || 1,
+  };
+}
+
 export default async function CaseDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const caseData = await getCase(id);
@@ -178,7 +186,7 @@ export default async function CaseDetailPage({ params }: { params: Promise<{ id:
         }
         contentClassName="p-0"
       >
-        <div className="grid gap-3 border-b border-border/80 p-5 sm:grid-cols-3">
+        <div className="grid gap-3 border-b border-border/80 p-5 sm:grid-cols-4">
           <div className="rounded-[20px] border border-border/70 bg-white/80 px-4 py-3 text-sm">
             <p className="text-[0.72rem] uppercase tracking-[0.14em] text-muted-foreground">Total</p>
             <p className="mt-1 font-semibold text-foreground">{caseData.signatureSummary.total}</p>
@@ -190,6 +198,12 @@ export default async function CaseDetailPage({ params }: { params: Promise<{ id:
           <div className="rounded-[20px] border border-border/70 bg-white/80 px-4 py-3 text-sm">
             <p className="text-[0.72rem] uppercase tracking-[0.14em] text-muted-foreground">Firmadas</p>
             <p className="mt-1 font-semibold text-[#48745f]">{caseData.signatureSummary.signed}</p>
+          </div>
+          <div className="rounded-[20px] border border-border/70 bg-white/80 px-4 py-3 text-sm">
+            <p className="text-[0.72rem] uppercase tracking-[0.14em] text-muted-foreground">Firmantes</p>
+            <p className="mt-1 font-semibold text-foreground">
+              {caseData.signatureSummary.signedRecipients}/{caseData.signatureSummary.recipients}
+            </p>
           </div>
         </div>
 
@@ -208,7 +222,8 @@ export default async function CaseDetailPage({ params }: { params: Promise<{ id:
                   <div>
                     <p className="font-medium text-foreground">{request.subject}</p>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      {request.recipientName ?? request.recipientEmail} / {request.document?.originalFileName ?? "Documento pendiente"}
+                      {getSignatureProgress(request).signed} de {getSignatureProgress(request).total} firmantes /{" "}
+                      {request.document?.originalFileName ?? "Documento pendiente"}
                     </p>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">

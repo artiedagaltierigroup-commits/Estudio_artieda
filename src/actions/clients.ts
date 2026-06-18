@@ -117,19 +117,34 @@ export async function getClient(id: string) {
 
   if (!client) return null;
 
-  const signatureRows = await db.query.signatureRequests.findMany({
+  const signatureRecipientRows = await db.query.signatureRecipients.findMany({
     where: (item, { and: andOperator, eq: eqOperator }) =>
       andOperator(eqOperator(item.userId, userId), eqOperator(item.clientId, id)),
-    orderBy: (item, { desc }) => [desc(item.updatedAt)],
     with: {
-      case: true,
-      document: true,
-      events: {
-        orderBy: (event, { desc }) => [desc(event.createdAt)],
-        limit: 1,
+      request: {
+        with: {
+          case: true,
+          document: true,
+          recipients: {
+            orderBy: (recipient, { asc }) => [asc(recipient.sortOrder)],
+          },
+          events: {
+            orderBy: (event, { desc }) => [desc(event.createdAt)],
+            limit: 1,
+          },
+        },
       },
     },
   });
+  const seenSignatureRequestIds = new Set<string>();
+  const signatureRows = signatureRecipientRows
+    .map((row) => row.request)
+    .filter((request) => {
+      if (seenSignatureRequestIds.has(request.id)) return false;
+      seenSignatureRequestIds.add(request.id);
+      return true;
+    })
+    .sort((left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime());
 
   const caseSummary = summarizeClientCases(client.cases);
   const financeSummary = summarizeClientFinance({
