@@ -1,10 +1,12 @@
 import {
   cancelSignatureRequest,
+  deleteSignatureRequest,
   resendSignatureRequest,
   sendSignatureRequest,
 } from "@/actions/signatures";
 import { Button } from "@/components/ui/button";
-import { Ban, Copy, Download, RotateCw, Send } from "lucide-react";
+import { Ban, Download, RotateCw, Send, Trash2 } from "lucide-react";
+import { redirect } from "next/navigation";
 
 interface SignatureRequestActionsProps {
   requestId: string;
@@ -12,6 +14,7 @@ interface SignatureRequestActionsProps {
   signedDocumentAvailable?: boolean;
   signatureImageAvailable?: boolean;
   certificateAvailable?: boolean;
+  signedRecipientCount?: number;
 }
 
 function canSend(status: string) {
@@ -26,6 +29,7 @@ function canResend(status: string) {
     "DOCUMENT_VIEWED",
     "SIGNING_STARTED",
     "SIGNING_INTERRUPTED",
+    "PARTIALLY_SIGNED",
   ].includes(status);
 }
 
@@ -39,6 +43,7 @@ export function SignatureRequestActions({
   signedDocumentAvailable = false,
   signatureImageAvailable = false,
   certificateAvailable = false,
+  signedRecipientCount = 0,
 }: SignatureRequestActionsProps) {
   async function sendAction() {
     "use server";
@@ -53,6 +58,12 @@ export function SignatureRequestActions({
   async function cancelAction() {
     "use server";
     await cancelSignatureRequest(requestId);
+  }
+
+  async function deleteAction() {
+    "use server";
+    await deleteSignatureRequest(requestId);
+    redirect("/firmas");
   }
 
   return (
@@ -70,9 +81,18 @@ export function SignatureRequestActions({
         <form action={resendAction}>
           <Button type="submit" variant="outline">
             <RotateCw className="h-4 w-4" />
-            Reenviar
+            Reenviar pendientes
           </Button>
         </form>
+      ) : null}
+
+      {signedRecipientCount > 0 ? (
+        <Button asChild variant="outline">
+          <a href={`/api/signatures/${requestId}/partial-document`}>
+            <Download className="h-4 w-4" />
+            PDF con firmas actuales
+          </a>
+        </Button>
       ) : null}
 
       {status === "SIGNED" ? (
@@ -119,13 +139,6 @@ export function SignatureRequestActions({
         </>
       ) : null}
 
-      {canResend(status) || canSend(status) ? (
-        <Button type="button" variant="ghost" disabled title="Disponible despues del envio real de correo">
-          <Copy className="h-4 w-4" />
-          Copiar link
-        </Button>
-      ) : null}
-
       {canCancel(status) ? (
         <form action={cancelAction}>
           <Button type="submit" variant="outline">
@@ -134,6 +147,13 @@ export function SignatureRequestActions({
           </Button>
         </form>
       ) : null}
+
+      <form action={deleteAction}>
+        <Button type="submit" variant="ghost">
+          <Trash2 className="h-4 w-4" />
+          Eliminar solicitud
+        </Button>
+      </form>
     </div>
   );
 }

@@ -7,8 +7,10 @@ interface SignatureEventTimelineProps {
     type: string;
     ipAddress: string | null;
     userAgent: string | null;
+    signatureRecipientId?: string | null;
     createdAt: Date;
   }>;
+  recipientLabels?: Record<string, string>;
 }
 
 const eventLabels: Record<string, string> = {
@@ -36,7 +38,7 @@ function getEventTone(type: string) {
   return "lilac" as const;
 }
 
-export function SignatureEventTimeline({ events }: SignatureEventTimelineProps) {
+export function SignatureEventTimeline({ events, recipientLabels = {} }: SignatureEventTimelineProps) {
   if (events.length === 0) {
     return <div className="px-6 py-8 text-sm text-muted-foreground">Todavia no hay eventos registrados.</div>;
   }
@@ -49,6 +51,9 @@ export function SignatureEventTimeline({ events }: SignatureEventTimelineProps) 
             <div className="space-y-2">
               <StatusChip label={eventLabels[event.type] ?? event.type} tone={getEventTone(event.type)} />
               <div className="text-xs leading-5 text-muted-foreground">
+                {event.signatureRecipientId && recipientLabels[event.signatureRecipientId] ? (
+                  <p>Destinatario: {recipientLabels[event.signatureRecipientId]}</p>
+                ) : null}
                 {event.ipAddress ? <p>IP: {event.ipAddress}</p> : null}
                 {event.userAgent ? <p className="line-clamp-2">Dispositivo: {event.userAgent}</p> : null}
               </div>

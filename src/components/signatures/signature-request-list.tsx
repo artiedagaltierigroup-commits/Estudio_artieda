@@ -29,7 +29,14 @@ function canResend(status: string) {
     "DOCUMENT_VIEWED",
     "SIGNING_STARTED",
     "SIGNING_INTERRUPTED",
+    "PARTIALLY_SIGNED",
   ].includes(status);
+}
+
+function getRecipientProgress(request: SignatureRequestListItem) {
+  const total = request.recipients.length || 1;
+  const signed = request.recipients.filter((recipient) => recipient.status === "SIGNED").length;
+  return { signed, total };
 }
 
 export function SignatureRequestList({ requests, hasFilters }: SignatureRequestListProps) {
@@ -88,7 +95,7 @@ export function SignatureRequestList({ requests, hasFilters }: SignatureRequestL
                 <div className="space-y-1">
                   <p className="font-semibold text-foreground">{request.subject}</p>
                   <p className="text-xs text-muted-foreground">
-                    {request.recipientName ?? "Destinatario"} / {request.recipientEmail}
+                    {getRecipientProgress(request).signed}/{getRecipientProgress(request).total} firmantes
                   </p>
                   <p className="text-xs text-muted-foreground">
                     Creada: {formatDateTime(request.createdAt)}
@@ -106,6 +113,9 @@ export function SignatureRequestList({ requests, hasFilters }: SignatureRequestL
                   label={getSignatureStatusLabel(request.status)}
                   tone={getSignatureStatusTone(request.status)}
                 />
+                <p className="mt-2 text-xs text-muted-foreground">
+                  {getRecipientProgress(request).signed} de {getRecipientProgress(request).total} completaron
+                </p>
               </td>
               <td className="px-5 py-4 align-top text-xs text-muted-foreground">
                 {request.latestEvent ? (

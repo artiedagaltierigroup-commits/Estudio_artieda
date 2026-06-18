@@ -1,23 +1,32 @@
 import { getSignatureOriginalDocumentUrl, getSignatureRequest } from "@/actions/signatures";
 import { SignatureEventTimeline } from "@/components/signatures/signature-event-timeline";
+import { SignatureRecipientStatusList } from "@/components/signatures/signature-recipient-status-list";
 import { SignatureRequestActions } from "@/components/signatures/signature-request-actions";
 import { PageHeader } from "@/components/system/page-header";
 import { SectionCard } from "@/components/system/section-card";
 import { StatusChip } from "@/components/system/status-chip";
 import { Button } from "@/components/ui/button";
+import { getSignaturePlacementColor } from "@/lib/signature-placement-colors";
 import { getSignatureStatusLabel, getSignatureStatusTone } from "@/lib/signature-status";
 import { formatDateTime } from "@/lib/utils";
-import { ArrowLeft, Briefcase, FileText, Mail, UserRound } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-function placementStyle(document: NonNullable<Awaited<ReturnType<typeof getSignatureRequest>>>["document"]) {
-  if (!document) return undefined;
+type SignatureRequestDetail = NonNullable<Awaited<ReturnType<typeof getSignatureRequest>>>;
+type SignatureRecipientDetail = SignatureRequestDetail["recipients"][number];
+type SignaturePlacementDetail = SignatureRecipientDetail["placements"][number];
+
+function getRecipientName(recipient: SignatureRecipientDetail) {
+  return recipient.fullName ?? ([recipient.firstName, recipient.lastName].filter(Boolean).join(" ") || recipient.email);
+}
+
+function placementStyle(placement: SignaturePlacementDetail) {
   return {
-    left: `${Number(document.placementX) * 100}%`,
-    top: `${Number(document.placementY) * 100}%`,
-    width: `${Number(document.placementWidth) * 100}%`,
-    height: `${Number(document.placementHeight) * 100}%`,
+    left: `${Number(placement.placementX) * 100}%`,
+    top: `${Number(placement.placementY) * 100}%`,
+    width: `${Number(placement.placementWidth) * 100}%`,
+    height: `${Number(placement.placementHeight) * 100}%`,
   };
 }
 
@@ -30,6 +39,11 @@ export default async function FirmaDetallePage({ params }: { params: Promise<{ i
   const sortedEvents = [...request.events].sort(
     (left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime()
   );
+  const signedRecipientCount = request.recipients.filter((recipient) => recipient.status === "SIGNED").length;
+  const recipientCount = request.recipients.length || 1;
+  const recipientLabels = Object.fromEntries(
+    request.recipients.map((recipient) => [recipient.id, getRecipientName(recipient)])
+  );
 
   return (
     <div className="space-y-6">
@@ -39,7 +53,7 @@ export default async function FirmaDetallePage({ params }: { params: Promise<{ i
         description="Detalle operativo de la solicitud: estado, documento, destinatario y rastro de eventos."
         stats={[
           { label: "Estado", value: getSignatureStatusLabel(request.status) },
-          { label: "Destinatario", value: request.recipientName ?? request.recipientEmail },
+          { label: "Firmantes", value: `${signedRecipientCount}/${recipientCount}` },
           { label: "Vence", value: formatDateTime(request.tokenExpiresAt) },
           { label: "Eventos", value: `${request.events.length}` },
         ]}
@@ -67,7 +81,16 @@ export default async function FirmaDetallePage({ params }: { params: Promise<{ i
           signedDocumentAvailable={Boolean(request.document?.signedStoragePath)}
           signatureImageAvailable={Boolean(request.document?.signatureStoragePath)}
           certificateAvailable={Boolean(request.document?.signedSha256)}
+          signedRecipientCount={signedRecipientCount}
         />
+      </SectionCard>
+
+      <SectionCard
+        eyebrow="Firmantes"
+        title="Estado por destinatario"
+        description="Seguimiento individual de envios, firmas y espacios asignados."
+      >
+        <SignatureRecipientStatusList requestId={request.id} recipients={request.recipients} />
       </SectionCard>
 
       <div className="space-y-6">
@@ -89,49 +112,33 @@ export default async function FirmaDetallePage({ params }: { params: Promise<{ i
               </div>
             )}
 
-            {request.document ? (
-              <div
-                className="pointer-events-none absolute rounded-[14px] border-2 border-[#9a4e69] bg-[#f7d6e0]/35"
-                style={placementStyle(request.document)}
-              >
-                <span className="absolute -top-7 left-0 rounded-full bg-[#9a4e69] px-3 py-1 text-[0.68rem] font-semibold text-white">
-                  Firma
-                </span>
-              </div>
-            ) : null}
+            {request.recipients.map((recipient, recipientIndex) =>
+              recipient.placements.map((placement, placementIndex) => {
+                const color = getSignaturePlacementColor(recipientIndex);
+                return (
+                  <div
+                    key={placement.id}
+                    className="pointer-events-none absolute rounded-[14px] border-2"
+                    style={{
+                      ...placementStyle(placement),
+                      borderColor: color.border,
+                      backgroundColor: color.background,
+                    }}
+                  >
+                    <span
+                      className="absolute -top-7 left-0 max-w-[13rem] truncate rounded-full px-3 py-1 text-[0.68rem] font-semibold text-white"
+                      style={{ backgroundColor: color.label }}
+                    >
+                      {getRecipientName(recipient)} #{placementIndex + 1}
+                    </span>
+                  </div>
+                );
+              })
+            )}
           </div>
         </SectionCard>
 
-        <div className="grid gap-6 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-          <SectionCard
-            eyebrow="Destinatario"
-            title="Datos de firma"
-            description="Informacion usada para el envio y la constancia."
-          >
-            <div className="grid gap-3 md:grid-cols-3">
-              <div className="rounded-[24px] border border-border/70 bg-white/85 p-4">
-                <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-                  <UserRound className="h-4 w-4 text-primary" />
-                  {request.recipientName ?? "Nombre no informado"}
-                </div>
-                <p className="mt-2 text-xs text-muted-foreground">{request.recipientTaxId ?? "Sin DNI/CUIT"}</p>
-              </div>
-              <div className="rounded-[24px] border border-border/70 bg-white/85 p-4">
-                <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-                  <Mail className="h-4 w-4 text-primary" />
-                  {request.recipientEmail}
-                </div>
-              </div>
-              <div className="rounded-[24px] border border-border/70 bg-white/85 p-4">
-                <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-                  <Briefcase className="h-4 w-4 text-primary" />
-                  {request.client?.name ?? "Sin cliente asociado"}
-                </div>
-                <p className="mt-2 text-xs text-muted-foreground">{request.case?.title ?? "Sin caso asociado"}</p>
-              </div>
-            </div>
-          </SectionCard>
-
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)]">
           <SectionCard eyebrow="Correo" title="Mensaje enviado" description="Contenido definido al crear la solicitud.">
             <div className="space-y-3 text-sm leading-6">
               <div className="rounded-[24px] border border-border/70 bg-white/85 p-4">
@@ -153,7 +160,7 @@ export default async function FirmaDetallePage({ params }: { params: Promise<{ i
         description="Registro cronologico de correo, apertura, firma y descargas."
         contentClassName="p-0"
       >
-        <SignatureEventTimeline events={sortedEvents} />
+        <SignatureEventTimeline events={sortedEvents} recipientLabels={recipientLabels} />
       </SectionCard>
     </div>
   );
