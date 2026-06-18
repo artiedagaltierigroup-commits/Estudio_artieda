@@ -64,6 +64,13 @@
       "when": 1781732343691,
       "tag": "0008_tan_alice",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1781757901805,
+      "tag": "0009_powerful_luminals",
+      "breakpoints": true
     }
   ]
 }

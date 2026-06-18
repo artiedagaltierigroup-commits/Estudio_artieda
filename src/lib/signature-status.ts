@@ -9,6 +9,7 @@ export type SignatureRequestStatus =
   | "DOCUMENT_VIEWED"
   | "SIGNING_STARTED"
   | "SIGNING_INTERRUPTED"
+  | "PARTIALLY_SIGNED"
   | "SIGNED"
   | "REJECTED"
   | "EXPIRED"
@@ -24,6 +25,7 @@ export function getSignatureStatusLabel(status: SignatureRequestStatus) {
     DOCUMENT_VIEWED: "Documento visto",
     SIGNING_STARTED: "Firma iniciada",
     SIGNING_INTERRUPTED: "Firma interrumpida",
+    PARTIALLY_SIGNED: "Parcialmente firmada",
     SIGNED: "Firmada",
     REJECTED: "Rechazada",
     EXPIRED: "Vencida",
@@ -36,7 +38,7 @@ export function getSignatureStatusLabel(status: SignatureRequestStatus) {
 export function getSignatureStatusTone(status: SignatureRequestStatus): VisualTone {
   if (status === "SIGNED") return "sage";
   if (status === "REJECTED" || status === "EXPIRED" || status === "CANCELLED") return "danger";
-  if (status === "SIGNING_INTERRUPTED" || status === "READY") return "amber";
+  if (status === "PARTIALLY_SIGNED" || status === "SIGNING_INTERRUPTED" || status === "READY") return "amber";
   if (status === "SENT" || status === "EMAIL_OPENED" || status === "LINK_OPENED" || status === "DOCUMENT_VIEWED") {
     return "lilac";
   }
