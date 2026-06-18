@@ -9,8 +9,7 @@ import { SubmitButton } from "@/components/system/submit-button";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { cn } from "@/lib/utils";
-import { FileSignature, Mail, Save, ShieldCheck } from "lucide-react";
+import { Save } from "lucide-react";
 import Link from "next/link";
 
 const selectClassName =
@@ -74,7 +73,7 @@ export function SignatureRequestForm({
   );
 
   return (
-    <form action={action} className="grid gap-6 xl:grid-cols-[minmax(0,1.25fr)_340px]">
+    <form action={action} className="space-y-6">
       <div className="space-y-6">
         <SectionCard
           eyebrow="Documento"
@@ -209,36 +208,6 @@ export function SignatureRequestForm({
           </SubmitButton>
         </div>
       </div>
-
-      <SectionCard
-        eyebrow="Revision"
-        title="Antes de enviar"
-        description="Checklist compacto para revisar que el pedido salga completo."
-      >
-        <div className="space-y-3 text-sm leading-6 text-muted-foreground">
-          <div className={cn("rounded-[24px] border p-4", fileName ? "border-[#b8d8c5] bg-[#f4fbf6]" : "border-border/70 bg-white/85")}>
-            <div className="flex items-center gap-2 font-medium text-foreground">
-              <FileSignature className="h-4 w-4 text-primary" />
-              Documento
-            </div>
-            <p className="mt-1">{fileName || "PDF pendiente"}</p>
-          </div>
-          <div className="rounded-[24px] border border-border/70 bg-white/85 p-4">
-            <div className="flex items-center gap-2 font-medium text-foreground">
-              <Mail className="h-4 w-4 text-primary" />
-              Correo
-            </div>
-            <p className="mt-1">{subject}</p>
-          </div>
-          <div className="rounded-[24px] border border-border/70 bg-white/85 p-4">
-            <div className="flex items-center gap-2 font-medium text-foreground">
-              <ShieldCheck className="h-4 w-4 text-primary" />
-              Consentimiento
-            </div>
-            <p className="mt-1">El firmante confirmara la firma desde el link seguro.</p>
-          </div>
-        </div>
-      </SectionCard>
     </form>
   );
 }
