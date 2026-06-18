@@ -1,18 +1,28 @@
 "use server";
 
 import { createHash, randomBytes } from "crypto";
-import { and, eq, ilike, or } from "drizzle-orm";
+import { and, eq, ilike, inArray, ne, or } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db } from "../db";
-import { signatureDocuments, signatureEvents, signatureRequests } from "../db/schema";
+import {
+  signatureDocuments,
+  signatureEvents,
+  signaturePlacements,
+  signatureRecipients,
+  signatureRequests,
+} from "../db/schema";
 import { shouldOfferSavedSignature } from "../lib/client-saved-signatures";
 import { buildEmailOpenUrl, buildSigningUrl, sendSignatureRequestEmail } from "../lib/signature-email";
 import { buildSignatureStoragePath, hashBufferSha256, SIGNATURE_BUCKET } from "../lib/signature-files";
 import type { SignatureRequestStatus } from "../lib/signature-status";
 import { createClient } from "../lib/supabase/server";
 import { logActivity } from "./activity-log";
-import { buildRecipientName, normalizeSignatureEmail } from "./signatures-helpers";
+import {
+  buildRecipientTokenPayloads,
+  parseSignatureRecipientsFromFormData,
+  validateSignatureRecipients,
+} from "./signatures-helpers";
 
 const DEFAULT_EXPIRATION_DAYS = 15;
 
@@ -21,11 +31,6 @@ const SignatureDraftSchema = z.object({
   caseId: z.string().uuid("Caso invalido").optional().or(z.literal("")),
   subject: z.string().trim().min(1, "El asunto es obligatorio"),
   message: z.string().optional(),
-  recipientName: z.string().optional(),
-  recipientFirstName: z.string().optional(),
-  recipientLastName: z.string().optional(),
-  recipientEmail: z.string().email("Email del destinatario invalido"),
-  recipientTaxId: z.string().optional(),
 });
 
 const PlacementSchema = z.object({
@@ -84,12 +89,16 @@ async function getUserId(): Promise<string> {
 async function logSignatureEvent(params: {
   userId: string;
   signatureRequestId: string;
+  signatureRecipientId?: string | null;
+  signaturePlacementId?: string | null;
   type: SignatureEventType;
   metadata?: Record<string, unknown>;
 }) {
   await db.insert(signatureEvents).values({
     userId: params.userId,
     signatureRequestId: params.signatureRequestId,
+    signatureRecipientId: params.signatureRecipientId ?? null,
+    signaturePlacementId: params.signaturePlacementId ?? null,
     type: params.type,
     metadata: params.metadata ?? null,
   });
@@ -110,6 +119,21 @@ async function getOwnedSignatureRequest(id: string, userId: string) {
       client: true,
       case: true,
       document: true,
+      recipients: {
+        orderBy: (recipient, { asc }) => [asc(recipient.sortOrder)],
+        with: {
+          client: true,
+          placements: {
+            orderBy: (placement, { asc }) => [asc(placement.sortOrder)],
+          },
+          events: {
+            orderBy: (event, { desc }) => [desc(event.createdAt)],
+          },
+        },
+      },
+      placements: {
+        orderBy: (placement, { asc }) => [asc(placement.sortOrder)],
+      },
       events: {
         orderBy: (event, { desc }) => [desc(event.createdAt)],
       },
@@ -145,6 +169,9 @@ export async function getSignatureRequests(filters?: {
       client: true,
       case: true,
       document: true,
+      recipients: {
+        orderBy: (recipient, { asc }) => [asc(recipient.sortOrder)],
+      },
       events: {
         orderBy: (event, { desc }) => [desc(event.createdAt)],
         limit: 1,
@@ -221,15 +248,28 @@ export async function createSignatureDraft(formData: FormData) {
   const parsed = SignatureDraftSchema.safeParse(raw);
   if (!parsed.success) return { error: parsed.error.errors[0].message };
 
-  const token = buildToken();
+  const recipients = parseSignatureRecipientsFromFormData(formData);
+  const recipientValidation = validateSignatureRecipients(recipients);
+  if (!recipientValidation.success) return { error: recipientValidation.error };
+
   const tokenExpiresAt = buildTokenExpiration();
   const caseId = normalizeOptionalUuid(parsed.data.caseId);
-  const clientId = normalizeOptionalUuid(parsed.data.clientId);
-  const recipientName =
-    buildRecipientName({
-      firstName: parsed.data.recipientFirstName,
-      lastName: parsed.data.recipientLastName,
-    }) || normalizeOptionalText(parsed.data.recipientName);
+  const recipientTokenPayloads = buildRecipientTokenPayloads(recipients, {
+    tokenFactory: () => buildToken(),
+    hashToken,
+    tokenExpiresAt,
+  });
+  const primaryPayload = recipientTokenPayloads[0];
+  const primaryRecipient = primaryPayload.recipient;
+
+  const recipientClientIds = [...new Set(recipients.map((recipient) => recipient.clientId).filter(Boolean))] as string[];
+  if (recipientClientIds.length > 0) {
+    const ownedClients = await db.query.clients.findMany({
+      where: (client, { and: andOperator, eq: eqOperator }) =>
+        andOperator(eqOperator(client.userId, userId), inArray(client.id, recipientClientIds)),
+    });
+    if (ownedClients.length !== recipientClientIds.length) return { error: "Cliente no encontrado" };
+  }
 
   if (caseId) {
     const currentCase = await db.query.cases.findFirst({
@@ -237,30 +277,69 @@ export async function createSignatureDraft(formData: FormData) {
         andOperator(eqOperator(item.id, caseId), eqOperator(item.userId, userId)),
     });
     if (!currentCase) return { error: "Caso no encontrado" };
-    if (clientId && currentCase.clientId !== clientId) return { error: "El caso no pertenece al cliente seleccionado" };
   }
 
   const [inserted] = await db
     .insert(signatureRequests)
     .values({
       userId,
-      clientId,
+      clientId: primaryRecipient.clientId,
       caseId,
       subject: parsed.data.subject.trim(),
       message: normalizeOptionalText(parsed.data.message),
-      recipientName,
-      recipientEmail: normalizeSignatureEmail(parsed.data.recipientEmail),
-      recipientTaxId: normalizeOptionalText(parsed.data.recipientTaxId),
-      tokenHash: hashToken(token),
+      recipientName: primaryRecipient.fullName,
+      recipientEmail: primaryRecipient.email,
+      recipientTaxId: primaryRecipient.taxId,
+      tokenHash: primaryPayload.tokenHash,
       tokenExpiresAt,
     })
     .returning();
+
+  const insertedRecipients = await db
+    .insert(signatureRecipients)
+    .values(
+      recipientTokenPayloads.map((payload, index) => ({
+        userId,
+        signatureRequestId: inserted.id,
+        clientId: payload.recipient.clientId,
+        firstName: payload.recipient.firstName || payload.recipient.email,
+        lastName: payload.recipient.lastName,
+        fullName: payload.recipient.fullName,
+        email: payload.recipient.email,
+        taxId: payload.recipient.taxId,
+        tokenHash: payload.tokenHash,
+        tokenExpiresAt: payload.tokenExpiresAt,
+        sortOrder: index,
+      }))
+    )
+    .returning();
+
+  const placementValues = insertedRecipients.flatMap((recipient, recipientIndex) =>
+    recipients[recipientIndex].placements.map((placement, placementIndex) => ({
+      userId,
+      signatureRequestId: inserted.id,
+      recipientId: recipient.id,
+      pageNumber: placement.pageNumber,
+      placementX: placement.x.toFixed(4),
+      placementY: placement.y.toFixed(4),
+      placementWidth: placement.width.toFixed(4),
+      placementHeight: placement.height.toFixed(4),
+      sortOrder: placementIndex,
+    }))
+  );
+
+  if (placementValues.length > 0) {
+    await db.insert(signaturePlacements).values(placementValues);
+  }
 
   await logSignatureEvent({
     userId,
     signatureRequestId: inserted.id,
     type: "created",
-    metadata: { recipientEmail: inserted.recipientEmail },
+    metadata: {
+      recipientCount: recipients.length,
+      recipientEmails: recipients.map((recipient) => recipient.email),
+    },
   });
 
   await logActivity({
@@ -271,7 +350,8 @@ export async function createSignatureDraft(formData: FormData) {
     newValue: {
       subject: inserted.subject,
       recipientEmail: inserted.recipientEmail,
-      clientId,
+      recipientCount: recipients.length,
+      clientId: primaryRecipient.clientId,
       caseId,
     },
   });
@@ -399,35 +479,73 @@ async function sendOrResendSignatureRequest(requestId: string, eventType: "sent"
   if (request.status === "SIGNED") return { error: "La solicitud ya esta firmada" };
   if (request.status === "CANCELLED") return { error: "La solicitud esta cancelada" };
 
-  const token = buildToken();
   const tokenExpiresAt = buildTokenExpiration();
   const now = new Date();
+  const pendingRecipients = request.recipients.filter(
+    (recipient) => recipient.status !== "SIGNED" && recipient.status !== "CANCELLED" && recipient.status !== "EXPIRED"
+  );
+  if (pendingRecipients.length === 0) return { error: "No hay destinatarios pendientes" };
+
+  const recipientPayloads = pendingRecipients.map((recipient) => {
+    const token = buildToken();
+    return {
+      recipient,
+      token,
+      tokenHash: hashToken(token),
+      signingUrl: buildSigningUrl(token),
+      emailOpenUrl: buildEmailOpenUrl(token),
+    };
+  });
+  const primaryPayload = recipientPayloads[0];
 
   await db
     .update(signatureRequests)
     .set({
       status: "SENT",
-      tokenHash: hashToken(token),
+      tokenHash: primaryPayload.tokenHash,
       tokenExpiresAt,
       sentAt: eventType === "sent" ? now : request.sentAt ?? now,
       updatedAt: now,
     })
     .where(and(eq(signatureRequests.id, requestId), eq(signatureRequests.userId, userId)));
 
-  const signingUrl = buildSigningUrl(token);
-  await sendSignatureRequestEmail({
-    to: request.recipientEmail,
-    subject: request.subject,
-    message: request.message,
-    signingUrl,
-    emailOpenUrl: buildEmailOpenUrl(token),
-  });
+  for (const payload of recipientPayloads) {
+    await db
+      .update(signatureRecipients)
+      .set({
+        status: "SENT",
+        tokenHash: payload.tokenHash,
+        tokenExpiresAt,
+        sentAt: eventType === "sent" ? now : payload.recipient.sentAt ?? now,
+        updatedAt: now,
+      })
+      .where(and(eq(signatureRecipients.id, payload.recipient.id), eq(signatureRecipients.userId, userId)));
+
+    await sendSignatureRequestEmail({
+      to: payload.recipient.email,
+      subject: request.subject,
+      message: request.message,
+      signingUrl: payload.signingUrl,
+      emailOpenUrl: payload.emailOpenUrl,
+    });
+
+    await logSignatureEvent({
+      userId,
+      signatureRequestId: requestId,
+      signatureRecipientId: payload.recipient.id,
+      type: eventType,
+      metadata: { recipientEmail: payload.recipient.email },
+    });
+  }
 
   await logSignatureEvent({
     userId,
     signatureRequestId: requestId,
     type: eventType,
-    metadata: { recipientEmail: request.recipientEmail },
+    metadata: {
+      recipientCount: recipientPayloads.length,
+      recipientEmails: recipientPayloads.map((payload) => payload.recipient.email),
+    },
   });
 
   await logActivity({
@@ -439,7 +557,15 @@ async function sendOrResendSignatureRequest(requestId: string, eventType: "sent"
   });
 
   revalidateSignaturePaths(request);
-  return { success: true, signingUrl };
+  return {
+    success: true,
+    signingUrl: primaryPayload.signingUrl,
+    signingUrls: recipientPayloads.map((payload) => ({
+      recipientId: payload.recipient.id,
+      email: payload.recipient.email,
+      signingUrl: payload.signingUrl,
+    })),
+  };
 }
 
 export async function sendSignatureRequest(requestId: string) {
@@ -448,6 +574,71 @@ export async function sendSignatureRequest(requestId: string) {
 
 export async function resendSignatureRequest(requestId: string) {
   return sendOrResendSignatureRequest(requestId, "resent");
+}
+
+export async function resendSignatureRecipient(requestId: string, recipientId: string) {
+  const userId = await getUserId();
+  const request = await getOwnedSignatureRequest(requestId, userId);
+  if (!request) return { error: "Solicitud no encontrada" };
+  if (!request.document) return { error: "Subi el documento antes de reenviar" };
+  if (request.status === "SIGNED") return { error: "La solicitud ya esta firmada" };
+  if (request.status === "CANCELLED") return { error: "La solicitud esta cancelada" };
+
+  const recipient = request.recipients.find((item) => item.id === recipientId);
+  if (!recipient) return { error: "Destinatario no encontrado" };
+  if (recipient.status === "SIGNED") return { error: "El destinatario ya firmo" };
+  if (recipient.status === "CANCELLED" || recipient.status === "EXPIRED") {
+    return { error: "El destinatario ya no esta pendiente" };
+  }
+
+  const now = new Date();
+  const token = buildToken();
+  const tokenHash = hashToken(token);
+  const tokenExpiresAt = buildTokenExpiration(now);
+  const signingUrl = buildSigningUrl(token);
+
+  await db
+    .update(signatureRecipients)
+    .set({
+      status: "SENT",
+      tokenHash,
+      tokenExpiresAt,
+      sentAt: recipient.sentAt ?? now,
+      updatedAt: now,
+    })
+    .where(and(eq(signatureRecipients.id, recipient.id), eq(signatureRecipients.userId, userId)));
+
+  await db
+    .update(signatureRequests)
+    .set({ status: "SENT", tokenHash, tokenExpiresAt, sentAt: request.sentAt ?? now, updatedAt: now })
+    .where(and(eq(signatureRequests.id, requestId), eq(signatureRequests.userId, userId)));
+
+  await sendSignatureRequestEmail({
+    to: recipient.email,
+    subject: request.subject,
+    message: request.message,
+    signingUrl,
+    emailOpenUrl: buildEmailOpenUrl(token),
+  });
+
+  await logSignatureEvent({
+    userId,
+    signatureRequestId: requestId,
+    signatureRecipientId: recipient.id,
+    type: "resent",
+    metadata: { recipientEmail: recipient.email },
+  });
+
+  await logActivity({
+    userId,
+    entityType: "signature_request",
+    entityId: requestId,
+    action: "resent",
+    newValue: { recipientId: recipient.id, recipientEmail: recipient.email, tokenExpiresAt },
+  });
+
+  revalidateSignaturePaths(request);
+  return { success: true, signingUrl };
 }
 
 export async function cancelSignatureRequest(requestId: string) {
@@ -461,6 +652,17 @@ export async function cancelSignatureRequest(requestId: string) {
     .update(signatureRequests)
     .set({ status: "CANCELLED", cancelledAt, updatedAt: cancelledAt })
     .where(and(eq(signatureRequests.id, requestId), eq(signatureRequests.userId, userId)));
+
+  await db
+    .update(signatureRecipients)
+    .set({ status: "CANCELLED", cancelledAt, updatedAt: cancelledAt })
+    .where(
+      and(
+        eq(signatureRecipients.signatureRequestId, requestId),
+        eq(signatureRecipients.userId, userId),
+        ne(signatureRecipients.status, "SIGNED")
+      )
+    );
 
   await logSignatureEvent({
     userId,
@@ -476,6 +678,29 @@ export async function cancelSignatureRequest(requestId: string) {
     previousValue: { status: request.status },
     newValue: { status: "CANCELLED", cancelledAt },
   });
+
+  revalidateSignaturePaths(request);
+  return { success: true };
+}
+
+export async function deleteSignatureRequest(requestId: string) {
+  const userId = await getUserId();
+  const request = await getOwnedSignatureRequest(requestId, userId);
+  if (!request) return { error: "Solicitud no encontrada" };
+
+  await logActivity({
+    userId,
+    entityType: "signature_request",
+    entityId: requestId,
+    action: "deleted",
+    previousValue: {
+      status: request.status,
+      subject: request.subject,
+      recipientEmail: request.recipientEmail,
+    },
+  });
+
+  await db.delete(signatureRequests).where(and(eq(signatureRequests.id, requestId), eq(signatureRequests.userId, userId)));
 
   revalidateSignaturePaths(request);
   return { success: true };
