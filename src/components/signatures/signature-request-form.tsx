@@ -9,6 +9,7 @@ import { SubmitButton } from "@/components/system/submit-button";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { splitPersonName } from "@/actions/signatures-helpers";
 import { Save } from "lucide-react";
 import Link from "next/link";
 
@@ -57,8 +58,14 @@ export function SignatureRequestForm({
 }: SignatureRequestFormProps) {
   const initialCase = cases.find((currentCase) => currentCase.id === defaultCaseId);
   const initialClientId = defaultClientId ?? initialCase?.clientId ?? "";
+  const initialClient = clients.find((client) => client.id === initialClientId) ?? null;
+  const initialClientName = splitPersonName(initialClient?.name);
   const [selectedClientId, setSelectedClientId] = useState(initialClientId);
   const [selectedCaseId, setSelectedCaseId] = useState(defaultCaseId ?? "");
+  const [recipientFirstName, setRecipientFirstName] = useState(initialClientName.firstName);
+  const [recipientLastName, setRecipientLastName] = useState(initialClientName.lastName);
+  const [recipientEmail, setRecipientEmail] = useState(initialClient?.email ?? "");
+  const [recipientTaxId, setRecipientTaxId] = useState(initialClient?.taxId ?? "");
   const [fileName, setFileName] = useState("");
   const [fileSize, setFileSize] = useState("");
   const [fileError, setFileError] = useState<string | null>(null);
@@ -71,6 +78,17 @@ export function SignatureRequestForm({
     () => cases.filter((currentCase) => !selectedClientId || currentCase.clientId === selectedClientId),
     [cases, selectedClientId]
   );
+
+  function fillRecipientFromClient(clientId: string) {
+    const client = clients.find((item) => item.id === clientId);
+    if (!client) return;
+
+    const clientName = splitPersonName(client.name);
+    setRecipientFirstName(clientName.firstName);
+    setRecipientLastName(clientName.lastName);
+    setRecipientEmail(client.email ?? "");
+    setRecipientTaxId(client.taxId ?? "");
+  }
 
   return (
     <form action={action} className="space-y-6">
@@ -111,16 +129,46 @@ export function SignatureRequestForm({
         >
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="recipientName">Nombre</Label>
-              <Input id="recipientName" name="recipientName" placeholder="Nombre del firmante" />
+              <Label htmlFor="recipientFirstName">Nombre</Label>
+              <Input
+                id="recipientFirstName"
+                name="recipientFirstName"
+                value={recipientFirstName}
+                onChange={(event) => setRecipientFirstName(event.target.value)}
+                placeholder="Nombre del firmante"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="recipientLastName">Apellido</Label>
+              <Input
+                id="recipientLastName"
+                name="recipientLastName"
+                value={recipientLastName}
+                onChange={(event) => setRecipientLastName(event.target.value)}
+                placeholder="Apellido del firmante"
+              />
             </div>
             <div className="space-y-2">
               <Label htmlFor="recipientEmail">Email</Label>
-              <Input id="recipientEmail" name="recipientEmail" type="email" required placeholder="cliente@email.com" />
+              <Input
+                id="recipientEmail"
+                name="recipientEmail"
+                type="email"
+                required
+                value={recipientEmail}
+                onChange={(event) => setRecipientEmail(event.target.value)}
+                placeholder="cliente@email.com"
+              />
             </div>
-            <div className="space-y-2 sm:col-span-2">
+            <div className="space-y-2">
               <Label htmlFor="recipientTaxId">DNI / CUIT opcional</Label>
-              <Input id="recipientTaxId" name="recipientTaxId" placeholder="Identificacion del firmante" />
+              <Input
+                id="recipientTaxId"
+                name="recipientTaxId"
+                value={recipientTaxId}
+                onChange={(event) => setRecipientTaxId(event.target.value)}
+                placeholder="Identificacion del firmante"
+              />
             </div>
           </div>
         </SectionCard>
@@ -138,8 +186,10 @@ export function SignatureRequestForm({
                 name="clientId"
                 value={selectedClientId}
                 onChange={(event) => {
-                  setSelectedClientId(event.target.value);
+                  const nextClientId = event.target.value;
+                  setSelectedClientId(nextClientId);
                   setSelectedCaseId("");
+                  fillRecipientFromClient(nextClientId);
                 }}
                 className={selectClassName}
               >
@@ -162,7 +212,10 @@ export function SignatureRequestForm({
                   const nextCaseId = event.target.value;
                   setSelectedCaseId(nextCaseId);
                   const nextCase = cases.find((currentCase) => currentCase.id === nextCaseId);
-                  if (nextCase) setSelectedClientId(nextCase.clientId);
+                  if (nextCase) {
+                    setSelectedClientId(nextCase.clientId);
+                    fillRecipientFromClient(nextCase.clientId);
+                  }
                 }}
                 className={selectClassName}
               >

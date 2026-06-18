@@ -12,7 +12,7 @@ import { buildSignatureStoragePath, hashBufferSha256, SIGNATURE_BUCKET } from ".
 import type { SignatureRequestStatus } from "../lib/signature-status";
 import { createClient } from "../lib/supabase/server";
 import { logActivity } from "./activity-log";
-import { normalizeSignatureEmail } from "./signatures-helpers";
+import { buildRecipientName, normalizeSignatureEmail } from "./signatures-helpers";
 
 const DEFAULT_EXPIRATION_DAYS = 15;
 
@@ -22,6 +22,8 @@ const SignatureDraftSchema = z.object({
   subject: z.string().trim().min(1, "El asunto es obligatorio"),
   message: z.string().optional(),
   recipientName: z.string().optional(),
+  recipientFirstName: z.string().optional(),
+  recipientLastName: z.string().optional(),
   recipientEmail: z.string().email("Email del destinatario invalido"),
   recipientTaxId: z.string().optional(),
 });
@@ -223,6 +225,11 @@ export async function createSignatureDraft(formData: FormData) {
   const tokenExpiresAt = buildTokenExpiration();
   const caseId = normalizeOptionalUuid(parsed.data.caseId);
   const clientId = normalizeOptionalUuid(parsed.data.clientId);
+  const recipientName =
+    buildRecipientName({
+      firstName: parsed.data.recipientFirstName,
+      lastName: parsed.data.recipientLastName,
+    }) || normalizeOptionalText(parsed.data.recipientName);
 
   if (caseId) {
     const currentCase = await db.query.cases.findFirst({
@@ -241,7 +248,7 @@ export async function createSignatureDraft(formData: FormData) {
       caseId,
       subject: parsed.data.subject.trim(),
       message: normalizeOptionalText(parsed.data.message),
-      recipientName: normalizeOptionalText(parsed.data.recipientName),
+      recipientName,
       recipientEmail: normalizeSignatureEmail(parsed.data.recipientEmail),
       recipientTaxId: normalizeOptionalText(parsed.data.recipientTaxId),
       tokenHash: hashToken(token),
