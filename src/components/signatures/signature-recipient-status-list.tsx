@@ -1,6 +1,6 @@
 import { resendSignatureRecipient } from "@/actions/signatures";
+import { SignatureActionForm } from "@/components/signatures/signature-action-form";
 import { StatusChip } from "@/components/system/status-chip";
-import { Button } from "@/components/ui/button";
 import { getSignatureStatusTone } from "@/lib/signature-status";
 import { formatDateTime } from "@/lib/utils";
 import { Mail, RotateCw, UserRound } from "lucide-react";
@@ -47,7 +47,7 @@ function canResendRecipient(status: string) {
 export function SignatureRecipientStatusList({ requestId, recipients }: SignatureRecipientStatusListProps) {
   async function resendRecipientAction(recipientId: string) {
     "use server";
-    await resendSignatureRecipient(requestId, recipientId);
+    return resendSignatureRecipient(requestId, recipientId);
   }
 
   if (recipients.length === 0) {
@@ -86,12 +86,18 @@ export function SignatureRecipientStatusList({ requestId, recipients }: Signatur
                 tone={getSignatureStatusTone(recipient.status as Parameters<typeof getSignatureStatusTone>[0])}
               />
               {canResendRecipient(recipient.status) ? (
-                <form action={resendRecipientAction.bind(null, recipient.id)}>
-                  <Button type="submit" variant="outline" size="sm">
+                <SignatureActionForm
+                  action={resendRecipientAction.bind(null, recipient.id)}
+                  pendingLabel="Reenviando..."
+                  successMessage="Correo reenviado"
+                  variant="outline"
+                  size="sm"
+                >
+                  <>
                     <RotateCw className="h-4 w-4" />
                     Reenviar
-                  </Button>
-                </form>
+                  </>
+                </SignatureActionForm>
               ) : null}
             </div>
           </div>

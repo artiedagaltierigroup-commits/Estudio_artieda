@@ -4,6 +4,7 @@ import {
   resendSignatureRequest,
   sendSignatureRequest,
 } from "@/actions/signatures";
+import { SignatureActionForm } from "@/components/signatures/signature-action-form";
 import { Button } from "@/components/ui/button";
 import { Ban, Download, RotateCw, Send, Trash2 } from "lucide-react";
 import { redirect } from "next/navigation";
@@ -47,12 +48,12 @@ export function SignatureRequestActions({
 }: SignatureRequestActionsProps) {
   async function sendAction() {
     "use server";
-    await sendSignatureRequest(requestId);
+    return sendSignatureRequest(requestId);
   }
 
   async function resendAction() {
     "use server";
-    await resendSignatureRequest(requestId);
+    return resendSignatureRequest(requestId);
   }
 
   async function cancelAction() {
@@ -69,21 +70,26 @@ export function SignatureRequestActions({
   return (
     <div className="flex flex-wrap items-center gap-3">
       {canSend(status) ? (
-        <form action={sendAction}>
-          <Button type="submit">
+        <SignatureActionForm action={sendAction} pendingLabel="Enviando..." successMessage="Solicitud enviada">
+          <>
             <Send className="h-4 w-4" />
             Enviar
-          </Button>
-        </form>
+          </>
+        </SignatureActionForm>
       ) : null}
 
       {canResend(status) ? (
-        <form action={resendAction}>
-          <Button type="submit" variant="outline">
+        <SignatureActionForm
+          action={resendAction}
+          pendingLabel="Reenviando..."
+          successMessage="Solicitud reenviada"
+          variant="outline"
+        >
+          <>
             <RotateCw className="h-4 w-4" />
             Reenviar pendientes
-          </Button>
-        </form>
+          </>
+        </SignatureActionForm>
       ) : null}
 
       {signedRecipientCount > 0 ? (

@@ -13,6 +13,7 @@ import {
   signatureRequests,
 } from "../db/schema";
 import { shouldOfferSavedSignature } from "../lib/client-saved-signatures";
+import { getFirstRecipientMissingPlacements } from "../lib/signature-recipients";
 import { buildRecipientSignatureEmail, sendSignatureRequestEmail } from "../lib/signature-email";
 import { buildSignatureStoragePath, hashBufferSha256, SIGNATURE_BUCKET } from "../lib/signature-files";
 import type { SignatureRequestStatus } from "../lib/signature-status";
@@ -485,6 +486,11 @@ async function sendOrResendSignatureRequest(requestId: string, eventType: "sent"
     (recipient) => recipient.status !== "SIGNED" && recipient.status !== "CANCELLED" && recipient.status !== "EXPIRED"
   );
   if (pendingRecipients.length === 0) return { error: "No hay destinatarios pendientes" };
+  const recipientMissingPlacement = getFirstRecipientMissingPlacements(pendingRecipients);
+  if (recipientMissingPlacement) {
+    const label = recipientMissingPlacement.fullName || recipientMissingPlacement.email;
+    return { error: `${label} necesita al menos un espacio de firma` };
+  }
 
   const recipientPayloads = pendingRecipients.map((recipient) => {
     const token = buildToken();
@@ -589,6 +595,10 @@ export async function resendSignatureRecipient(requestId: string, recipientId: s
   if (recipient.status === "SIGNED") return { error: "El destinatario ya firmo" };
   if (recipient.status === "CANCELLED" || recipient.status === "EXPIRED") {
     return { error: "El destinatario ya no esta pendiente" };
+  }
+  if (getFirstRecipientMissingPlacements([recipient])) {
+    const label = recipient.fullName || recipient.email;
+    return { error: `${label} necesita al menos un espacio de firma` };
   }
 
   const now = new Date();

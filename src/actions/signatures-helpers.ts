@@ -112,6 +112,10 @@ export function validateSignatureRecipients(recipients: SignatureRecipientFormVa
     if (!EmailSchema.safeParse(recipient.email).success) {
       return { success: false as const, error: "Email del destinatario invalido" };
     }
+
+    if (recipient.placements.length === 0) {
+      return { success: false as const, error: "Cada destinatario necesita al menos un espacio de firma" };
+    }
   }
 
   return { success: true as const };

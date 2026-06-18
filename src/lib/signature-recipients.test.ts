@@ -4,6 +4,7 @@ import {
   canAddSignatureRecipient,
   getAggregateSignatureStatus,
   recipientHasRequiredPlacements,
+  getFirstRecipientMissingPlacements,
 } from "./signature-recipients";
 
 describe("signature recipient helpers", () => {
@@ -29,5 +30,14 @@ describe("signature recipient helpers", () => {
     expect(recipientHasRequiredPlacements({ placements: [{ id: "placement-1" }] })).toBe(true);
     expect(recipientHasRequiredPlacements({ placements: [] })).toBe(false);
     expect(recipientHasRequiredPlacements({ placements: null })).toBe(false);
+  });
+
+  it("finds the first recipient without a signature placement", () => {
+    expect(
+      getFirstRecipientMissingPlacements([
+        { fullName: "Ana Perez", email: "ana@mail.com", placements: [{ id: "placement-1" }] },
+        { fullName: "Luis Lopez", email: "luis@mail.com", placements: [] },
+      ])
+    ).toEqual({ fullName: "Luis Lopez", email: "luis@mail.com", placements: [] });
   });
 });

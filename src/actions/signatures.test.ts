@@ -126,6 +126,25 @@ describe("signature action helpers", () => {
     });
   });
 
+  it("requires each recipient to have at least one signature placement", () => {
+    expect(
+      validateSignatureRecipients([
+        {
+          firstName: "Ana",
+          lastName: "Perez",
+          fullName: "Ana Perez",
+          email: "ana@mail.com",
+          taxId: null,
+          clientId: null,
+          placements: [],
+        },
+      ])
+    ).toEqual({
+      success: false,
+      error: "Cada destinatario necesita al menos un espacio de firma",
+    });
+  });
+
   it("builds deterministic token payloads for recipients", () => {
     const expiresAt = new Date("2026-07-01T10:00:00.000Z");
 

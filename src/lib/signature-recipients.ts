@@ -25,12 +25,23 @@ type RecipientPlacementInput = {
   placements?: ReadonlyArray<unknown> | null;
 };
 
+type RecipientPlacementLabelInput = RecipientPlacementInput & {
+  fullName?: string | null;
+  email?: string | null;
+};
+
 export function canAddSignatureRecipient(count: number) {
   return count < MAX_SIGNATURE_RECIPIENTS;
 }
 
 export function recipientHasRequiredPlacements(recipient: RecipientPlacementInput) {
   return (recipient.placements?.length ?? 0) > 0;
+}
+
+export function getFirstRecipientMissingPlacements<TRecipient extends RecipientPlacementLabelInput>(
+  recipients: ReadonlyArray<TRecipient>
+) {
+  return recipients.find((recipient) => !recipientHasRequiredPlacements(recipient)) ?? null;
 }
 
 export function getAggregateSignatureStatus(recipients: ReadonlyArray<RecipientStatusInput>): AggregateSignatureStatus {
