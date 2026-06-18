@@ -1,13 +1,16 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { PdfPlacementSelector } from "@/components/signatures/pdf-placement-selector";
 import { formatFileSize, PdfUploadField } from "@/components/signatures/pdf-upload-field";
 import { SignatureEmailEditor } from "@/components/signatures/signature-email-editor";
+import {
+  SignatureRecipientDraft,
+  SignatureRecipientList,
+} from "@/components/signatures/signature-recipient-list";
 import { SectionCard } from "@/components/system/section-card";
 import { SubmitButton } from "@/components/system/submit-button";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { splitPersonName } from "@/actions/signatures-helpers";
 import { Save } from "lucide-react";
@@ -48,6 +51,24 @@ function buildDefaultSubject(fileName: string) {
   return cleanName ? `Solicitud de firma: ${cleanName}` : "Solicitud de firma";
 }
 
+function createRecipientId() {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
+  return `recipient-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function buildRecipientFromClient(client: SignatureClientOption | null, id = createRecipientId()): SignatureRecipientDraft {
+  const name = splitPersonName(client?.name);
+
+  return {
+    id,
+    clientId: client?.id ?? "",
+    firstName: name.firstName,
+    lastName: name.lastName,
+    email: client?.email ?? "",
+    taxId: client?.taxId ?? "",
+  };
+}
+
 export function SignatureRequestForm({
   action,
   cancelHref,
@@ -59,13 +80,10 @@ export function SignatureRequestForm({
   const initialCase = cases.find((currentCase) => currentCase.id === defaultCaseId);
   const initialClientId = defaultClientId ?? initialCase?.clientId ?? "";
   const initialClient = clients.find((client) => client.id === initialClientId) ?? null;
-  const initialClientName = splitPersonName(initialClient?.name);
-  const [selectedClientId, setSelectedClientId] = useState(initialClientId);
+  const [recipients, setRecipients] = useState<SignatureRecipientDraft[]>([
+    buildRecipientFromClient(initialClient, "recipient-0"),
+  ]);
   const [selectedCaseId, setSelectedCaseId] = useState(defaultCaseId ?? "");
-  const [recipientFirstName, setRecipientFirstName] = useState(initialClientName.firstName);
-  const [recipientLastName, setRecipientLastName] = useState(initialClientName.lastName);
-  const [recipientEmail, setRecipientEmail] = useState(initialClient?.email ?? "");
-  const [recipientTaxId, setRecipientTaxId] = useState(initialClient?.taxId ?? "");
   const [fileName, setFileName] = useState("");
   const [fileSize, setFileSize] = useState("");
   const [fileError, setFileError] = useState<string | null>(null);
@@ -73,21 +91,16 @@ export function SignatureRequestForm({
   const [subject, setSubject] = useState("Solicitud de firma");
   const [subjectTouched, setSubjectTouched] = useState(false);
 
-  const selectedClient = clients.find((client) => client.id === selectedClientId) ?? null;
-  const filteredCases = useMemo(
-    () => cases.filter((currentCase) => !selectedClientId || currentCase.clientId === selectedClientId),
-    [cases, selectedClientId]
-  );
+  function handleRecipientChange(id: string, patch: Partial<SignatureRecipientDraft>) {
+    setRecipients((current) => current.map((recipient) => (recipient.id === id ? { ...recipient, ...patch } : recipient)));
+  }
 
-  function fillRecipientFromClient(clientId: string) {
-    const client = clients.find((item) => item.id === clientId);
-    if (!client) return;
+  function handleAddRecipient() {
+    setRecipients((current) => [...current, buildRecipientFromClient(null)]);
+  }
 
-    const clientName = splitPersonName(client.name);
-    setRecipientFirstName(clientName.firstName);
-    setRecipientLastName(clientName.lastName);
-    setRecipientEmail(client.email ?? "");
-    setRecipientTaxId(client.taxId ?? "");
+  function handleRemoveRecipient(id: string) {
+    setRecipients((current) => (current.length > 1 ? current.filter((recipient) => recipient.id !== id) : current));
   }
 
   return (
@@ -124,115 +137,42 @@ export function SignatureRequestForm({
 
         <SectionCard
           eyebrow="Destinatario"
-          title="Quien firma"
-          description="Datos minimos para enviar el link y dejar registro de la solicitud."
+          title="Quienes firman"
+          description="Agrega una o varias personas. Cada una recibira su propio link seguro."
         >
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="recipientFirstName">Nombre</Label>
-              <Input
-                id="recipientFirstName"
-                name="recipientFirstName"
-                value={recipientFirstName}
-                onChange={(event) => setRecipientFirstName(event.target.value)}
-                placeholder="Nombre del firmante"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="recipientLastName">Apellido</Label>
-              <Input
-                id="recipientLastName"
-                name="recipientLastName"
-                value={recipientLastName}
-                onChange={(event) => setRecipientLastName(event.target.value)}
-                placeholder="Apellido del firmante"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="recipientEmail">Email</Label>
-              <Input
-                id="recipientEmail"
-                name="recipientEmail"
-                type="email"
-                required
-                value={recipientEmail}
-                onChange={(event) => setRecipientEmail(event.target.value)}
-                placeholder="cliente@email.com"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="recipientTaxId">DNI / CUIT opcional</Label>
-              <Input
-                id="recipientTaxId"
-                name="recipientTaxId"
-                value={recipientTaxId}
-                onChange={(event) => setRecipientTaxId(event.target.value)}
-                placeholder="Identificacion del firmante"
-              />
-            </div>
-          </div>
+          <SignatureRecipientList
+            recipients={recipients}
+            clients={clients}
+            onAdd={handleAddRecipient}
+            onChange={handleRecipientChange}
+            onRemove={handleRemoveRecipient}
+          />
         </SectionCard>
 
         <SectionCard
-          eyebrow="Asociacion"
-          title="Cliente y caso opcionales"
-          description="Conecta la solicitud con la ficha correcta para encontrarla despues desde el sistema."
+          eyebrow="Caso"
+          title="Caso asociado"
+          description="El caso se asigna a la solicitud completa; cada destinatario puede tener su propio cliente."
         >
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="clientId">Cliente</Label>
-              <select
-                id="clientId"
-                name="clientId"
-                value={selectedClientId}
-                onChange={(event) => {
-                  const nextClientId = event.target.value;
-                  setSelectedClientId(nextClientId);
-                  setSelectedCaseId("");
-                  fillRecipientFromClient(nextClientId);
-                }}
-                className={selectClassName}
-              >
-                <option value="">Sin cliente asociado</option>
-                {clients.map((client) => (
-                  <option key={client.id} value={client.id}>
-                    {client.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
+          <div className="max-w-xl">
             <div className="space-y-2">
               <Label htmlFor="caseId">Caso</Label>
               <select
                 id="caseId"
                 name="caseId"
                 value={selectedCaseId}
-                onChange={(event) => {
-                  const nextCaseId = event.target.value;
-                  setSelectedCaseId(nextCaseId);
-                  const nextCase = cases.find((currentCase) => currentCase.id === nextCaseId);
-                  if (nextCase) {
-                    setSelectedClientId(nextCase.clientId);
-                    fillRecipientFromClient(nextCase.clientId);
-                  }
-                }}
+                onChange={(event) => setSelectedCaseId(event.target.value)}
                 className={selectClassName}
               >
                 <option value="">Sin caso asociado</option>
-                {filteredCases.map((currentCase) => (
+                {cases.map((currentCase) => (
                   <option key={currentCase.id} value={currentCase.id}>
                     {currentCase.title}
+                    {currentCase.clientName ? ` - ${currentCase.clientName}` : ""}
                   </option>
                 ))}
               </select>
             </div>
-
-            {selectedClient?.hasSavedSignature ? (
-              <div className="rounded-[24px] border border-[#d7c394] bg-[#fff9e8] px-4 py-3 text-sm text-[#775f22] sm:col-span-2">
-                Este cliente tiene una firma guardada. Podra elegir reutilizarla al firmar.
-              </div>
-            ) : null}
           </div>
         </SectionCard>
 
