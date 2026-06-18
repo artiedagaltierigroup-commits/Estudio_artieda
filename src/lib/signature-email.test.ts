@@ -12,6 +12,10 @@ describe("signature email", () => {
     expect(buildSigningUrl("token-1", "https://app.test/")).toBe("https://app.test/firmar/token-1");
   });
 
+  it("builds signing urls when the configured base url was pasted with angle brackets", () => {
+    expect(buildSigningUrl("token-1", " <https://app.test/> ")).toBe("https://app.test/firmar/token-1");
+  });
+
   it("builds plain text with the signing call to action", () => {
     const text = buildEmailText({
       subject: "Solicitud de firma: Contrato",

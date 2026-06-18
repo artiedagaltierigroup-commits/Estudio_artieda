@@ -20,6 +20,10 @@ interface BuildRecipientSignatureEmailParams {
 
 const ctaLabel = "Firmar solicitud";
 
+function normalizeBaseUrl(baseUrl: string) {
+  return baseUrl.trim().replace(/^<+/, "").replace(/>+$/, "").replace(/\/$/, "");
+}
+
 function escapeHtml(value: string) {
   return value
     .replace(/&/g, "&amp;")
@@ -30,15 +34,15 @@ function escapeHtml(value: string) {
 }
 
 export function buildSigningUrl(token: string, baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000") {
-  return `${baseUrl.replace(/\/$/, "")}/firmar/${token}`;
+  return `${normalizeBaseUrl(baseUrl)}/firmar/${token}`;
 }
 
 export function buildEmailOpenUrl(token: string, baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000") {
-  return `${baseUrl.replace(/\/$/, "")}/api/signatures/email-open/${token}`;
+  return `${normalizeBaseUrl(baseUrl)}/api/signatures/email-open/${token}`;
 }
 
 export function buildFinalCopyUrl(token: string, baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000") {
-  return `${baseUrl.replace(/\/$/, "")}/api/signatures/final-copy/${token}`;
+  return `${normalizeBaseUrl(baseUrl)}/api/signatures/final-copy/${token}`;
 }
 
 export function buildRecipientSignatureEmail(params: BuildRecipientSignatureEmailParams): SendSignatureRequestEmailParams {
