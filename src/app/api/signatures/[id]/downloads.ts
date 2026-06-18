@@ -2,6 +2,7 @@ import { logActivity } from "@/actions/activity-log";
 import { db } from "@/db";
 import { signatureEvents } from "@/db/schema";
 import { SIGNATURE_BUCKET } from "@/lib/signature-files";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 type DownloadArtifact = "signed-document" | "signature-image" | "certificate" | "partial-document";
@@ -49,11 +50,11 @@ export async function getAuthenticatedSignatureRequest(id: string) {
   });
 
   if (!request) return { error: jsonError("Solicitud no encontrada", 404) };
-  return { request, supabase, userId: user.id };
+  return { request, userId: user.id };
 }
 
 export async function downloadStorageObject(path: string, contentType: string, fileName: string) {
-  const supabase = await createClient();
+  const supabase = createSupabaseAdminClient();
   const { data, error } = await supabase.storage.from(SIGNATURE_BUCKET).download(path);
 
   if (error || !data) return jsonError("El archivo todavia no esta disponible", 409);

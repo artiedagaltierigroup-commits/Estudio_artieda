@@ -17,6 +17,7 @@ import { getFirstRecipientMissingPlacements } from "../lib/signature-recipients"
 import { buildRecipientSignatureEmail, sendSignatureRequestEmail } from "../lib/signature-email";
 import { buildSignatureStoragePath, hashBufferSha256, SIGNATURE_BUCKET } from "../lib/signature-files";
 import type { SignatureRequestStatus } from "../lib/signature-status";
+import { createSupabaseAdminClient } from "../lib/supabase/admin";
 import { createClient } from "../lib/supabase/server";
 import { logActivity } from "./activity-log";
 import {
@@ -382,7 +383,7 @@ export async function uploadSignatureDocument(requestId: string, formData: FormD
     fileName: file.name,
   });
 
-  const supabase = await createClient();
+  const supabase = createSupabaseAdminClient();
   const { error } = await supabase.storage.from(SIGNATURE_BUCKET).upload(storagePath, buffer, {
     contentType: file.type,
     upsert: true,
@@ -747,7 +748,7 @@ export async function getSignatureOriginalDocumentUrl(requestId: string) {
   const request = await getOwnedSignatureRequest(requestId, userId);
   if (!request?.document) return null;
 
-  const supabase = await createClient();
+  const supabase = createSupabaseAdminClient();
   const { data, error } = await supabase.storage
     .from(SIGNATURE_BUCKET)
     .createSignedUrl(request.document.originalStoragePath, 60 * 10);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useActionState, useState } from "react";
 import { PdfPlacementSelector } from "@/components/signatures/pdf-placement-selector";
 import { formatFileSize, PdfUploadField } from "@/components/signatures/pdf-upload-field";
 import { SignatureEmailEditor } from "@/components/signatures/signature-email-editor";
@@ -38,12 +38,20 @@ interface SignatureCaseOption {
 }
 
 interface SignatureRequestFormProps {
-  action: (formData: FormData) => void | Promise<void>;
+  action: (
+    state: SignatureRequestFormState,
+    formData: FormData
+  ) => SignatureRequestFormState | Promise<SignatureRequestFormState>;
   cancelHref: string;
   clients: SignatureClientOption[];
   cases: SignatureCaseOption[];
   defaultClientId?: string | null;
   defaultCaseId?: string | null;
+}
+
+interface SignatureRequestFormState {
+  error?: string | null;
+  signatureRequestId?: string | null;
 }
 
 function buildDefaultSubject(fileName: string) {
@@ -91,6 +99,7 @@ export function SignatureRequestForm({
   const [placementsReady, setPlacementsReady] = useState(false);
   const [subject, setSubject] = useState("Solicitud de firma");
   const [subjectTouched, setSubjectTouched] = useState(false);
+  const [submitState, formAction] = useActionState(action, { error: null, signatureRequestId: null });
 
   function handleRecipientChange(id: string, patch: Partial<SignatureRecipientDraft>) {
     setRecipients((current) => current.map((recipient) => (recipient.id === id ? { ...recipient, ...patch } : recipient)));
@@ -105,7 +114,7 @@ export function SignatureRequestForm({
   }
 
   return (
-    <form action={action} className="space-y-6">
+    <form action={formAction} className="space-y-6">
       <div className="space-y-6">
         <SectionCard
           eyebrow="Documento"
@@ -203,6 +212,16 @@ export function SignatureRequestForm({
         </SectionCard>
 
         <div className="flex flex-wrap items-center justify-end gap-3">
+          {submitState.error ? (
+            <div className="basis-full rounded-[18px] border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive" role="alert">
+              <p>{submitState.error}</p>
+              {submitState.signatureRequestId ? (
+                <Link className="mt-2 inline-block font-semibold underline" href={`/firmas/${submitState.signatureRequestId}`}>
+                  Abrir solicitud guardada
+                </Link>
+              ) : null}
+            </div>
+          ) : null}
           <Button asChild variant="outline">
             <Link href={cancelHref}>Cancelar</Link>
           </Button>

@@ -1,4 +1,5 @@
 import { buildSignatureStoragePath, SIGNATURE_BUCKET } from "@/lib/signature-files";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import {
   buildSignatureCertificateData,
   generateSignatureCertificatePdf,
@@ -24,7 +25,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   const result = await getAuthenticatedSignatureRequest(id);
   if ("error" in result) return result.error;
 
-  const { request, supabase, userId } = result;
+  const { request, userId } = result;
   if (request.status !== "SIGNED" || !request.document?.signedSha256) {
     return jsonError("La constancia todavia no esta disponible", 409);
   }
@@ -67,6 +68,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     fileName: "constancia-firma.pdf",
   });
 
+  const supabase = createSupabaseAdminClient();
   const upload = await supabase.storage.from(SIGNATURE_BUCKET).upload(certificatePath, Buffer.from(certificateBytes), {
     contentType: "application/pdf",
     upsert: true,

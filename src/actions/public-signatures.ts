@@ -15,7 +15,7 @@ import {
 } from "../lib/signature-files";
 import { embedRecipientSignaturesInPdf } from "../lib/signature-pdf";
 import { getAggregateSignatureStatus } from "../lib/signature-recipients";
-import { createClient } from "../lib/supabase/server";
+import { createSupabaseAdminClient } from "../lib/supabase/admin";
 
 type PublicSignatureEventType = "link_opened" | "signing_started" | "signing_interrupted" | "signed";
 
@@ -66,7 +66,7 @@ async function generateSignedPdfForRequest(requestId: string) {
   );
   if (signedRecipients.length === 0) return null;
 
-  const supabase = await createClient();
+  const supabase = createSupabaseAdminClient();
   const { data: originalPdfData, error: originalPdfError } = await supabase.storage
     .from(SIGNATURE_BUCKET)
     .download(request.document.originalStoragePath);
@@ -315,7 +315,7 @@ export async function submitPublicSignature(token: string, formData: FormData) {
     fileName: `firma-${recipient.id}.png`,
   });
 
-  const supabase = await createClient();
+  const supabase = createSupabaseAdminClient();
   const signatureUpload = await supabase.storage.from(SIGNATURE_BUCKET).upload(signatureStoragePath, signatureBytes, {
     contentType: "image/png",
     upsert: true,

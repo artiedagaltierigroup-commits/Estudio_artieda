@@ -1,5 +1,6 @@
 import {
   createSignatureDraft,
+  deleteSignatureRequest,
   getSignatureFormOptions,
   sendSignatureRequest,
   updateSignaturePlacement,
@@ -12,24 +13,45 @@ import { ArrowLeft, FileSignature } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
-async function handleSubmit(formData: FormData) {
+type SignatureRequestFormState = {
+  error?: string | null;
+  signatureRequestId?: string | null;
+};
+
+async function handleSubmit(_state: SignatureRequestFormState, formData: FormData): Promise<SignatureRequestFormState> {
   "use server";
 
   const draft = await createSignatureDraft(formData);
-  if (!draft.success) return;
+  if (!draft.success) return { error: draft.error ?? "No se pudo crear la solicitud" };
 
   const requestId = draft.signatureRequestId;
   const upload = await uploadSignatureDocument(requestId, formData);
 
-  if (upload.success) {
-    await updateSignaturePlacement(requestId, {
-      pageNumber: Number(formData.get("pageNumber") ?? 1),
-      x: Number(formData.get("placementX") ?? 0.58),
-      y: Number(formData.get("placementY") ?? 0.72),
-      width: Number(formData.get("placementWidth") ?? 0.28),
-      height: Number(formData.get("placementHeight") ?? 0.12),
-    });
-    await sendSignatureRequest(requestId);
+  if (!upload.success) {
+    await deleteSignatureRequest(requestId);
+    return { error: `No se pudo guardar el PDF: ${upload.error ?? "intenta nuevamente"}` };
+  }
+
+  const placement = await updateSignaturePlacement(requestId, {
+    pageNumber: Number(formData.get("pageNumber") ?? 1),
+    x: Number(formData.get("placementX") ?? 0.58),
+    y: Number(formData.get("placementY") ?? 0.72),
+    width: Number(formData.get("placementWidth") ?? 0.28),
+    height: Number(formData.get("placementHeight") ?? 0.12),
+  });
+  if (!placement.success) {
+    return {
+      error: `Solicitud guardada, pero no se pudo actualizar la ubicacion: ${placement.error ?? "revisala desde el detalle"}`,
+      signatureRequestId: requestId,
+    };
+  }
+
+  const send = await sendSignatureRequest(requestId);
+  if (!send.success) {
+    return {
+      error: `Solicitud guardada, pero no se pudo enviar: ${send.error ?? "revisala desde el detalle"}`,
+      signatureRequestId: requestId,
+    };
   }
 
   redirect(`/firmas/${requestId}`);
