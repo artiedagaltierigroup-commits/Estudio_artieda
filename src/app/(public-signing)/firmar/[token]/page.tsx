@@ -1,11 +1,11 @@
-import { getPublicSignatureRequest, trackPublicSignatureEvent } from "@/actions/public-signatures";
+import { getPublicSignatureRequest } from "@/actions/public-signatures";
+import { PublicSignatureOpenTracker } from "@/components/signatures/public-signature-open-tracker";
 import { PublicSignaturePad } from "@/components/signatures/public-signature-pad";
 import { PublicSignatureReview } from "@/components/signatures/public-signature-review";
 import { FileSignature, ShieldAlert } from "lucide-react";
 
 export default async function PublicSigningPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
-  await trackPublicSignatureEvent(token, "link_opened");
   const result = await getPublicSignatureRequest(token);
 
   if ("error" in result) {
@@ -26,6 +26,8 @@ export default async function PublicSigningPage({ params }: { params: Promise<{ 
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
+      <PublicSignatureOpenTracker token={token} />
+
       <header className="rounded-[32px] border border-border/80 bg-white p-6 shadow-[0_24px_80px_-60px_rgba(122,56,79,0.3)]">
         <div className="flex items-start justify-between gap-4">
           <div className="space-y-3">
