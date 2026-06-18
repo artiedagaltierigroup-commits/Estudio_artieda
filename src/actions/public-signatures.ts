@@ -5,96 +5,28 @@ import { and, eq } from "drizzle-orm";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { db } from "../db";
-import { clientSavedSignatures, signatureDocuments, signatureEvents, signatureRequests } from "../db/schema";
+import { signatureEvents, signatureRecipients, signatureRequests } from "../db/schema";
 import { shouldOfferSavedSignature } from "../lib/client-saved-signatures";
-import { isSignatureRequestExpired } from "../lib/signature-expiration";
-import {
-  buildSignatureStoragePath,
-  buildSignedDocumentRetention,
-  hashBufferSha256,
-  SIGNATURE_BUCKET,
-} from "../lib/signature-files";
-import { embedSignatureInPdf } from "../lib/signature-pdf";
+import { buildSignatureStoragePath, hashBufferSha256, SIGNATURE_BUCKET } from "../lib/signature-files";
+import { getAggregateSignatureStatus } from "../lib/signature-recipients";
 import { createClient } from "../lib/supabase/server";
 
-type PublicSignatureEventType =
-  | "link_opened"
-  | "document_viewed"
-  | "signing_started"
-  | "signing_interrupted"
-  | "signed"
-  | "rejected";
+type PublicSignatureEventType = "link_opened" | "signing_started" | "signing_interrupted" | "signed";
 
 function hashToken(token: string) {
   return createHash("sha256").update(token).digest("hex");
 }
 
-function isTerminalStatus(status: string) {
+function isTerminalRecipientStatus(status: string) {
+  return ["SIGNED", "EXPIRED", "CANCELLED"].includes(status);
+}
+
+function isTerminalRequestStatus(status: string) {
   return ["SIGNED", "REJECTED", "EXPIRED", "CANCELLED"].includes(status);
 }
 
-async function getRequestByToken(token: string) {
-  return db.query.signatureRequests.findFirst({
-    where: (item, { eq: eqOperator }) => eqOperator(item.tokenHash, hashToken(token)),
-    with: {
-      client: {
-        with: {
-          savedSignature: true,
-        },
-      },
-      document: true,
-      events: {
-        orderBy: (event, { desc }) => [desc(event.createdAt)],
-      },
-    },
-  });
-}
-
-async function expirePublicRequest(request: NonNullable<Awaited<ReturnType<typeof getRequestByToken>>>) {
-  const now = new Date();
-  await db
-    .update(signatureRequests)
-    .set({ status: "EXPIRED", updatedAt: now })
-    .where(eq(signatureRequests.id, request.id));
-
-  await db.insert(signatureEvents).values({
-    userId: request.userId,
-    signatureRequestId: request.id,
-    type: "expired",
-    metadata: { tokenExpiresAt: request.tokenExpiresAt },
-  });
-}
-
-async function getRequestHeaders() {
-  const headerStore = await headers();
-  return {
-    ipAddress:
-      headerStore.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-      headerStore.get("x-real-ip") ??
-      null,
-    userAgent: headerStore.get("user-agent"),
-  };
-}
-
-async function createPublicEvent(params: {
-  token: string;
-  type: PublicSignatureEventType;
-  metadata?: Record<string, unknown>;
-}) {
-  const request = await getRequestByToken(params.token);
-  if (!request) return null;
-
-  const headerData = await getRequestHeaders();
-  await db.insert(signatureEvents).values({
-    userId: request.userId,
-    signatureRequestId: request.id,
-    type: params.type,
-    metadata: params.metadata ?? null,
-    ipAddress: headerData.ipAddress,
-    userAgent: headerData.userAgent,
-  });
-
-  return request;
+function isRecipientExpired(recipient: { tokenExpiresAt: Date }) {
+  return recipient.tokenExpiresAt.getTime() < Date.now();
 }
 
 function decodeDataUrl(dataUrl: string) {
@@ -102,256 +34,214 @@ function decodeDataUrl(dataUrl: string) {
   return Buffer.from(base64, "base64");
 }
 
-export async function getPublicSignatureRequest(token: string) {
-  const request = await getRequestByToken(token);
-  if (!request) return { error: "Solicitud no encontrada" };
+function getRecipientDisplayName(recipient: { firstName: string; lastName: string; fullName: string | null; email: string }) {
+  return recipient.fullName ?? ([recipient.firstName, recipient.lastName].filter(Boolean).join(" ") || recipient.email);
+}
 
-  if (isSignatureRequestExpired(request)) {
-    await expirePublicRequest(request);
+async function getRecipientByToken(token: string) {
+  return db.query.signatureRecipients.findFirst({
+    where: (item, { eq: eqOperator }) => eqOperator(item.tokenHash, hashToken(token)),
+    with: {
+      client: {
+        with: {
+          savedSignature: true,
+        },
+      },
+      request: {
+        with: {
+          recipients: {
+            orderBy: (recipient, { asc }) => [asc(recipient.sortOrder)],
+          },
+        },
+      },
+      placements: {
+        orderBy: (placement, { asc }) => [asc(placement.sortOrder)],
+      },
+      events: {
+        orderBy: (event, { desc }) => [desc(event.createdAt)],
+      },
+    },
+  });
+}
+
+async function getRequestHeaders() {
+  const headerStore = await headers();
+  return {
+    ipAddress: headerStore.get("x-forwarded-for")?.split(",")[0]?.trim() ?? headerStore.get("x-real-ip") ?? null,
+    userAgent: headerStore.get("user-agent"),
+  };
+}
+
+async function updateRequestAggregateStatus(requestId: string, signedAt?: Date) {
+  const recipients = await db.query.signatureRecipients.findMany({
+    where: (recipient, { eq: eqOperator }) => eqOperator(recipient.signatureRequestId, requestId),
+  });
+  const status = getAggregateSignatureStatus(recipients);
+  const nextSignedAt = status === "SIGNED" ? signedAt ?? new Date() : null;
+
+  await db
+    .update(signatureRequests)
+    .set({
+      status,
+      signedAt: nextSignedAt,
+      updatedAt: new Date(),
+    })
+    .where(eq(signatureRequests.id, requestId));
+
+  return status;
+}
+
+async function createPublicEvent(params: {
+  token: string;
+  type: PublicSignatureEventType | "expired";
+  metadata?: Record<string, unknown>;
+}) {
+  const recipient = await getRecipientByToken(params.token);
+  if (!recipient) return null;
+
+  const headerData = await getRequestHeaders();
+  await db.insert(signatureEvents).values({
+    userId: recipient.userId,
+    signatureRequestId: recipient.signatureRequestId,
+    signatureRecipientId: recipient.id,
+    type: params.type,
+    metadata: params.metadata ?? null,
+    ipAddress: headerData.ipAddress,
+    userAgent: headerData.userAgent,
+  });
+
+  return recipient;
+}
+
+async function expirePublicRecipient(recipient: NonNullable<Awaited<ReturnType<typeof getRecipientByToken>>>) {
+  const now = new Date();
+  await db
+    .update(signatureRecipients)
+    .set({ status: "EXPIRED", updatedAt: now })
+    .where(eq(signatureRecipients.id, recipient.id));
+
+  await db.insert(signatureEvents).values({
+    userId: recipient.userId,
+    signatureRequestId: recipient.signatureRequestId,
+    signatureRecipientId: recipient.id,
+    type: "expired",
+    metadata: { tokenExpiresAt: recipient.tokenExpiresAt },
+  });
+
+  await updateRequestAggregateStatus(recipient.signatureRequestId);
+}
+
+export async function getPublicSignatureRequest(token: string) {
+  const recipient = await getRecipientByToken(token);
+  if (!recipient) return { error: "Solicitud no encontrada" };
+
+  if (isRecipientExpired(recipient)) {
+    await expirePublicRecipient(recipient);
     return { error: "Esta solicitud de firma vencio. Pedi al estudio que vuelva a enviarla." };
   }
 
-  if (request.status === "CANCELLED") return { error: "Esta solicitud fue cancelada." };
-  if (request.status === "REJECTED") return { error: "Esta solicitud fue rechazada." };
-  if (!request.document) return { error: "La solicitud no tiene documento disponible." };
-
-  const supabase = await createClient();
-  const { data } = await supabase.storage
-    .from(SIGNATURE_BUCKET)
-    .createSignedUrl(request.document.originalStoragePath, 60 * 10);
+  if (recipient.request.status === "CANCELLED") return { error: "Esta solicitud fue cancelada." };
+  if (recipient.status === "CANCELLED") return { error: "Esta solicitud fue cancelada." };
+  if (recipient.status === "EXPIRED") return { error: "Esta solicitud de firma vencio." };
 
   return {
     request: {
-      id: request.id,
-      subject: request.subject,
-      message: request.message,
-      status: request.status,
-      recipientName: request.recipientName,
-      recipientEmail: request.recipientEmail,
-      tokenExpiresAt: request.tokenExpiresAt,
-      document: {
-        originalFileName: request.document.originalFileName,
-        previewUrl: data?.signedUrl ?? null,
-        pageNumber: request.document.pageNumber,
-        placementX: request.document.placementX,
-        placementY: request.document.placementY,
-        placementWidth: request.document.placementWidth,
-        placementHeight: request.document.placementHeight,
-      },
+      id: recipient.request.id,
+      subject: recipient.request.subject,
+      message: recipient.request.message,
+      status: recipient.request.status,
+      recipientStatus: recipient.status,
+      recipientName: getRecipientDisplayName(recipient),
+      recipientEmail: recipient.email,
+      tokenExpiresAt: recipient.tokenExpiresAt,
       savedSignatureAvailable: shouldOfferSavedSignature({
-        clientId: request.clientId,
-        savedSignatureId: request.client?.savedSignature?.id ?? null,
+        clientId: recipient.clientId,
+        savedSignatureId: recipient.client?.savedSignature?.id ?? null,
       }),
-      canSaveSignatureForClient: Boolean(request.clientId),
+      canSaveSignatureForClient: Boolean(recipient.clientId),
     },
   };
 }
 
 export async function trackPublicSignatureEvent(token: string, eventType: PublicSignatureEventType) {
-  const request = await createPublicEvent({ token, type: eventType });
-  if (!request) return { error: "Solicitud no encontrada" };
+  const recipient = await createPublicEvent({ token, type: eventType });
+  if (!recipient) return { error: "Solicitud no encontrada" };
 
-  const statusByEvent: Partial<Record<PublicSignatureEventType, typeof signatureRequests.$inferSelect.status>> = {
+  const statusByEvent: Partial<Record<PublicSignatureEventType, typeof signatureRecipients.$inferSelect.status>> = {
     link_opened: "LINK_OPENED",
-    document_viewed: "DOCUMENT_VIEWED",
     signing_started: "SIGNING_STARTED",
     signing_interrupted: "SIGNING_INTERRUPTED",
   };
 
   const nextStatus = statusByEvent[eventType];
-  if (nextStatus && !isTerminalStatus(request.status)) {
+  if (nextStatus && !isTerminalRecipientStatus(recipient.status) && !isTerminalRequestStatus(recipient.request.status)) {
     await db
-      .update(signatureRequests)
+      .update(signatureRecipients)
       .set({ status: nextStatus, updatedAt: new Date() })
-      .where(and(eq(signatureRequests.id, request.id), eq(signatureRequests.tokenHash, hashToken(token))));
+      .where(and(eq(signatureRecipients.id, recipient.id), eq(signatureRecipients.tokenHash, hashToken(token))));
+
+    await updateRequestAggregateStatus(recipient.signatureRequestId);
   }
 
-  revalidatePath(`/firmas/${request.id}`);
+  revalidatePath(`/firmas/${recipient.signatureRequestId}`);
   return { success: true };
 }
 
 export async function submitPublicSignature(token: string, formData: FormData) {
-  const request = await getRequestByToken(token);
-  if (!request) return { error: "Solicitud no encontrada" };
-  if (isTerminalStatus(request.status)) return { error: "Esta solicitud ya no puede firmarse." };
-  if (isSignatureRequestExpired(request)) {
-    await expirePublicRequest(request);
+  const recipient = await getRecipientByToken(token);
+  if (!recipient) return { error: "Solicitud no encontrada" };
+  if (isTerminalRequestStatus(recipient.request.status) || isTerminalRecipientStatus(recipient.status)) {
+    return { error: "Esta solicitud ya no puede firmarse." };
+  }
+  if (isRecipientExpired(recipient)) {
+    await expirePublicRecipient(recipient);
     return { error: "Esta solicitud vencio." };
   }
-  if (!request.document) return { error: "La solicitud no tiene documento disponible." };
 
-  const consent = formData.get("consent") === "on";
-  const useSavedSignature = formData.get("useSavedSignature") === "on";
-  const saveForClient = formData.get("saveForClient") === "on";
   const signatureDataUrl = String(formData.get("signatureDataUrl") ?? "");
-
-  if (!consent) return { error: "Debes aceptar la firma electronica para continuar." };
-  if (!useSavedSignature && !signatureDataUrl.startsWith("data:image/png;base64,")) {
-    return { error: "Dibuja o selecciona una firma." };
+  if (!signatureDataUrl.startsWith("data:image/png;base64,")) {
+    return { error: "Dibuja una firma para continuar." };
   }
 
-  const supabase = await createClient();
-  const { data: originalPdfData, error: originalPdfError } = await supabase.storage
-    .from(SIGNATURE_BUCKET)
-    .download(request.document.originalStoragePath);
-  if (originalPdfError || !originalPdfData) return { error: "No se pudo leer el PDF original." };
-
-  let signatureBytes: Buffer;
-  if (useSavedSignature) {
-    const savedSignaturePath = request.client?.savedSignature?.storagePath;
-    if (!savedSignaturePath) return { error: "No hay firma guardada disponible." };
-    const { data: savedSignatureData, error: savedSignatureError } = await supabase.storage
-      .from(SIGNATURE_BUCKET)
-      .download(savedSignaturePath);
-    if (savedSignatureError || !savedSignatureData) return { error: "No se pudo leer la firma guardada." };
-    signatureBytes = Buffer.from(await savedSignatureData.arrayBuffer());
-  } else {
-    signatureBytes = decodeDataUrl(signatureDataUrl);
-  }
-
+  const signatureBytes = decodeDataUrl(signatureDataUrl);
   const signedAt = new Date();
-  const signerName = request.recipientName ?? request.recipientEmail;
-  const originalPdfBytes = Buffer.from(await originalPdfData.arrayBuffer());
-  const signed = await embedSignatureInPdf({
-    originalPdfBytes,
-    signaturePngBytes: signatureBytes,
-    signerName,
-    signedAt,
-    pageNumber: request.document.pageNumber,
-    placement: {
-      x: Number(request.document.placementX),
-      y: Number(request.document.placementY),
-      width: Number(request.document.placementWidth),
-      height: Number(request.document.placementHeight),
-    },
-  });
-
   const signatureSha256 = await hashBufferSha256(signatureBytes);
   const signatureStoragePath = buildSignatureStoragePath({
-    userId: request.userId,
-    requestId: request.id,
+    userId: recipient.userId,
+    requestId: recipient.signatureRequestId,
     kind: "signature",
-    fileName: "firma.png",
-  });
-  const signedStoragePath = buildSignatureStoragePath({
-    userId: request.userId,
-    requestId: request.id,
-    kind: "signed",
-    fileName: `firmado-${request.document.originalFileName}`,
+    fileName: `firma-${recipient.id}.png`,
   });
 
+  const supabase = await createClient();
   const signatureUpload = await supabase.storage.from(SIGNATURE_BUCKET).upload(signatureStoragePath, signatureBytes, {
     contentType: "image/png",
     upsert: true,
   });
   if (signatureUpload.error) return { error: signatureUpload.error.message };
 
-  const signedUpload = await supabase.storage
-    .from(SIGNATURE_BUCKET)
-    .upload(signedStoragePath, Buffer.from(signed.signedPdfBytes), {
-      contentType: "application/pdf",
-      upsert: true,
-    });
-  if (signedUpload.error) return { error: signedUpload.error.message };
-
-  const signedRetention = buildSignedDocumentRetention({
-    originalStoragePath: request.document.originalStoragePath,
-    signedStoragePath,
-  });
-  if (signedRetention.storagePathsToDelete.length > 0) {
-    const removal = await supabase.storage.from(SIGNATURE_BUCKET).remove(signedRetention.storagePathsToDelete);
-    if (removal.error) {
-      console.warn("Could not remove original signature PDF after signing", removal.error);
-    }
-  }
-
   await db
-    .update(signatureDocuments)
+    .update(signatureRecipients)
     .set({
-      originalStoragePath: signedRetention.originalStoragePath,
+      status: "SIGNED",
+      signedAt,
       signatureStoragePath,
       signatureSha256,
-      signedStoragePath,
-      signedSha256: signed.signedSha256,
       updatedAt: signedAt,
     })
-    .where(eq(signatureDocuments.id, request.document.id));
+    .where(and(eq(signatureRecipients.id, recipient.id), eq(signatureRecipients.tokenHash, hashToken(token))));
 
-  await db
-    .update(signatureRequests)
-    .set({ status: "SIGNED", signedAt, updatedAt: signedAt })
-    .where(and(eq(signatureRequests.id, request.id), eq(signatureRequests.tokenHash, hashToken(token))));
-
-  const existingSavedSignature = request.client?.savedSignature;
-  if (useSavedSignature && existingSavedSignature) {
-    await db
-      .update(clientSavedSignatures)
-      .set({
-        lastUsedAt: signedAt,
-        updatedAt: signedAt,
-      })
-      .where(eq(clientSavedSignatures.id, existingSavedSignature.id));
-  }
-
-  if (saveForClient && request.clientId && !useSavedSignature) {
-    if (existingSavedSignature) {
-      await db
-        .update(clientSavedSignatures)
-        .set({
-          signerName: request.recipientName,
-          signerEmail: request.recipientEmail,
-          storagePath: signatureStoragePath,
-          sha256: signatureSha256,
-          consentedAt: signedAt,
-          lastUsedAt: signedAt,
-          updatedAt: signedAt,
-        })
-        .where(eq(clientSavedSignatures.id, existingSavedSignature.id));
-    } else {
-      await db.insert(clientSavedSignatures).values({
-        userId: request.userId,
-        clientId: request.clientId,
-        signerName: request.recipientName,
-        signerEmail: request.recipientEmail,
-        storagePath: signatureStoragePath,
-        sha256: signatureSha256,
-        consentedAt: signedAt,
-        lastUsedAt: signedAt,
-      });
-    }
-  }
+  const aggregateStatus = await updateRequestAggregateStatus(recipient.signatureRequestId, signedAt);
 
   await createPublicEvent({
     token,
     type: "signed",
     metadata: {
-      signedSha256: signed.signedSha256,
       signatureSha256,
-      usedSavedSignature: useSavedSignature,
-      savedForClient: saveForClient && Boolean(request.clientId),
+      aggregateStatus,
     },
   });
 
-  return { success: true, requestId: request.id };
-}
-
-export async function rejectPublicSignature(token: string, reason?: string) {
-  const request = await getRequestByToken(token);
-  if (!request) return { error: "Solicitud no encontrada" };
-  if (isTerminalStatus(request.status)) return { error: "Esta solicitud ya no puede rechazarse." };
-
-  const now = new Date();
-  await db
-    .update(signatureRequests)
-    .set({ status: "REJECTED", rejectedAt: now, updatedAt: now })
-    .where(and(eq(signatureRequests.id, request.id), eq(signatureRequests.tokenHash, hashToken(token))));
-
-  await createPublicEvent({
-    token,
-    type: "rejected",
-    metadata: { reason: reason?.trim() || null },
-  });
-
-  revalidatePath(`/firmas/${request.id}`);
-  return { success: true };
+  revalidatePath(`/firmas/${recipient.signatureRequestId}`);
+  return { success: true, requestId: recipient.signatureRequestId };
 }

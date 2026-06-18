@@ -24,7 +24,7 @@ export function PublicSignatureReview({
           {subject}
         </div>
         <p className="mt-2 text-sm leading-6 text-muted-foreground">
-          {message ?? "Revisa el documento y confirma la firma electronica cuando estes conforme."}
+          {message ?? "El estudio te envio esta solicitud de firma electronica."}
         </p>
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
@@ -55,10 +55,10 @@ export function PublicSignatureReview({
       <div className="rounded-[24px] border border-border/70 bg-white/90 p-4">
         <div className="flex items-center gap-2 text-sm font-medium text-foreground">
           <Mail className="h-4 w-4 text-primary" />
-          Dudas sobre el documento
+          Dudas sobre la solicitud
         </div>
         <p className="mt-2 text-xs leading-5 text-muted-foreground">
-          Si algo no coincide, no firmes y consulta al estudio antes de continuar.
+          Si algo no coincide, consulta al estudio antes de continuar.
         </p>
       </div>
     </div>
