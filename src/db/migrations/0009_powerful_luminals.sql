@@ -59,6 +59,143 @@ CREATE UNIQUE INDEX "signature_recipients_token_hash_idx" ON "signature_recipien
 ALTER TABLE "signature_events" ADD CONSTRAINT "signature_events_signature_recipient_id_signature_recipients_id_fk" FOREIGN KEY ("signature_recipient_id") REFERENCES "public"."signature_recipients"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "signature_events" ADD CONSTRAINT "signature_events_signature_placement_id_signature_placements_id_fk" FOREIGN KEY ("signature_placement_id") REFERENCES "public"."signature_placements"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 
+WITH legacy_recipients AS (
+	SELECT
+		gen_random_uuid() AS id,
+		requests."user_id",
+		requests."id" AS signature_request_id,
+		requests."client_id",
+		COALESCE(NULLIF(split_part(names.full_name, ' ', 1), ''), requests."recipient_email") AS first_name,
+		CASE
+			WHEN position(' ' in names.full_name) > 0 THEN substring(names.full_name from position(' ' in names.full_name) + 1)
+			ELSE ''
+		END AS last_name,
+		NULLIF(names.full_name, '') AS full_name,
+		requests."recipient_email" AS email,
+		requests."recipient_tax_id" AS tax_id,
+		(CASE
+			WHEN requests."status"::text = 'REJECTED' THEN 'CANCELLED'
+			WHEN requests."status"::text = 'PARTIALLY_SIGNED' THEN 'SIGNED'
+			ELSE requests."status"::text
+		END)::"public"."signature_recipient_status" AS status,
+		requests."token_hash",
+		requests."token_expires_at",
+		requests."sent_at",
+		requests."signed_at",
+		COALESCE(requests."cancelled_at", requests."rejected_at") AS cancelled_at,
+		'#9A4E69' AS color,
+		0 AS sort_order,
+		documents."signature_storage_path",
+		documents."signature_sha256",
+		requests."created_at",
+		requests."updated_at"
+	FROM "signature_requests" requests
+	LEFT JOIN "signature_documents" documents ON documents."signature_request_id" = requests."id"
+	CROSS JOIN LATERAL (
+		SELECT trim(regexp_replace(coalesce(requests."recipient_name", ''), '[[:space:]]+', ' ', 'g')) AS full_name
+	) names
+	WHERE NOT EXISTS (
+		SELECT 1
+		FROM "signature_recipients" existing
+		WHERE existing."signature_request_id" = requests."id"
+	)
+),
+inserted_recipients AS (
+	INSERT INTO "signature_recipients" (
+		"id",
+		"user_id",
+		"signature_request_id",
+		"client_id",
+		"first_name",
+		"last_name",
+		"full_name",
+		"email",
+		"tax_id",
+		"status",
+		"token_hash",
+		"token_expires_at",
+		"sent_at",
+		"signed_at",
+		"cancelled_at",
+		"color",
+		"sort_order",
+		"signature_storage_path",
+		"signature_sha256",
+		"created_at",
+		"updated_at"
+	)
+	SELECT
+		id,
+		user_id,
+		signature_request_id,
+		client_id,
+		first_name,
+		last_name,
+		full_name,
+		email,
+		tax_id,
+		status,
+		token_hash,
+		token_expires_at,
+		sent_at,
+		signed_at,
+		cancelled_at,
+		color,
+		sort_order,
+		signature_storage_path,
+		signature_sha256,
+		created_at,
+		updated_at
+	FROM legacy_recipients
+	RETURNING "id", "signature_request_id"
+)
+INSERT INTO "signature_placements" (
+	"user_id",
+	"signature_request_id",
+	"recipient_id",
+	"page_number",
+	"placement_x",
+	"placement_y",
+	"placement_width",
+	"placement_height",
+	"sort_order",
+	"created_at",
+	"updated_at"
+)
+SELECT
+	documents."user_id",
+	documents."signature_request_id",
+	legacy_recipients.id,
+	documents."page_number",
+	documents."placement_x",
+	documents."placement_y",
+	documents."placement_width",
+	documents."placement_height",
+	0,
+	documents."created_at",
+	documents."updated_at"
+FROM legacy_recipients
+INNER JOIN inserted_recipients ON inserted_recipients."id" = legacy_recipients.id
+INNER JOIN "signature_documents" documents ON documents."signature_request_id" = legacy_recipients.signature_request_id
+WHERE NOT EXISTS (
+	SELECT 1
+	FROM "signature_placements" existing
+	WHERE existing."recipient_id" = legacy_recipients.id
+);--> statement-breakpoint
+
+UPDATE "signature_events" events
+SET "signature_recipient_id" = recipients."id"
+FROM "signature_recipients" recipients
+WHERE events."signature_request_id" = recipients."signature_request_id"
+	AND events."signature_recipient_id" IS NULL;--> statement-breakpoint
+
+UPDATE "signature_events" events
+SET "signature_placement_id" = placements."id"
+FROM "signature_placements" placements
+WHERE events."signature_request_id" = placements."signature_request_id"
+	AND events."type" = 'placement_selected'
+	AND events."signature_placement_id" IS NULL;--> statement-breakpoint
+
 REVOKE ALL ON TABLE public.signature_recipients FROM anon;--> statement-breakpoint
 REVOKE ALL ON TABLE public.signature_placements FROM anon;--> statement-breakpoint
 
