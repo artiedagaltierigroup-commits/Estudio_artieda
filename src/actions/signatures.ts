@@ -22,6 +22,7 @@ import { createClient } from "../lib/supabase/server";
 import { logActivity } from "./activity-log";
 import {
   buildRecipientTokenPayloads,
+  parseSendSignedCopyToRecipients,
   parseSignatureRecipientsFromFormData,
   validateSignatureRecipients,
 } from "./signatures-helpers";
@@ -289,6 +290,7 @@ export async function createSignatureDraft(formData: FormData) {
       caseId,
       subject: parsed.data.subject.trim(),
       message: normalizeOptionalText(parsed.data.message),
+      sendSignedCopyToRecipients: parseSendSignedCopyToRecipients(formData),
       recipientName: primaryRecipient.fullName,
       recipientEmail: primaryRecipient.email,
       recipientTaxId: primaryRecipient.taxId,

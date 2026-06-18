@@ -78,6 +78,13 @@
       "when": 1781781600000,
       "tag": "0010_signature_storage_bucket",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1781793379700,
+      "tag": "0011_signature_final_copy_delivery",
+      "breakpoints": true
     }
   ]
 }

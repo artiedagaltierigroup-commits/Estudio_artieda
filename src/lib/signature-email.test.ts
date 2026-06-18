@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { buildEmailText, buildRecipientSignatureEmail, buildSigningUrl } from "./signature-email";
+import {
+  buildEmailText,
+  buildFinalCopyUrl,
+  buildRecipientSignatureEmail,
+  buildSignedDocumentCopyEmail,
+  buildSigningUrl,
+} from "./signature-email";
 
 describe("signature email", () => {
   it("builds signing urls without duplicate slashes", () => {
@@ -31,5 +37,26 @@ describe("signature email", () => {
       signingUrl: "https://app.test/firmar/recipient-token",
       emailOpenUrl: "https://app.test/api/signatures/email-open/recipient-token",
     });
+  });
+
+  it("builds the final signed copy download email", () => {
+    expect(buildFinalCopyUrl("download-token", "https://app.test/")).toBe(
+      "https://app.test/api/signatures/final-copy/download-token"
+    );
+
+    const email = buildSignedDocumentCopyEmail({
+      recipientEmail: "ana@mail.com",
+      subject: "Solicitud de firma: Contrato",
+      token: "download-token",
+      baseUrl: "https://app.test/",
+    });
+
+    expect(email).toMatchObject({
+      to: "ana@mail.com",
+      subject: "Documento firmado: Solicitud de firma: Contrato",
+      signingUrl: "https://app.test/api/signatures/final-copy/download-token",
+      ctaLabel: "Descargar documento firmado",
+    });
+    expect(buildEmailText(email)).toContain("Descargar documento firmado");
   });
 });

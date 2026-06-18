@@ -37,6 +37,11 @@ export function normalizeSignatureEmail(email: string) {
   return email.trim().toLowerCase();
 }
 
+export function parseSendSignedCopyToRecipients(formData: FormData) {
+  const value = formData.get("sendSignedCopyToRecipients");
+  return value === "on" || value === "true" || value === "1";
+}
+
 export function buildDefaultSignatureSubject(fileName: string) {
   const cleanName = fileName.replace(/\.pdf$/i, "");
   return `Solicitud de firma: ${cleanName}`;

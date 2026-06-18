@@ -11,6 +11,7 @@ import {
 import { SectionCard } from "@/components/system/section-card";
 import { SubmitButton } from "@/components/system/submit-button";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { splitPersonName } from "@/actions/signatures-helpers";
 import { Save } from "lucide-react";
@@ -99,6 +100,7 @@ export function SignatureRequestForm({
   const [placementsReady, setPlacementsReady] = useState(false);
   const [subject, setSubject] = useState("Solicitud de firma");
   const [subjectTouched, setSubjectTouched] = useState(false);
+  const [sendSignedCopyToRecipients, setSendSignedCopyToRecipients] = useState(false);
   const [submitState, formAction] = useActionState(action, { error: null, signatureRequestId: null });
 
   function handleRecipientChange(id: string, patch: Partial<SignatureRecipientDraft>) {
@@ -209,6 +211,30 @@ export function SignatureRequestForm({
               setSubject(value);
             }}
           />
+        </SectionCard>
+
+        <SectionCard
+          eyebrow="Entrega final"
+          title="Copia del documento firmado"
+          description="Define si los firmantes reciben automaticamente el PDF final cuando se completen todas las firmas."
+        >
+          <div className="flex max-w-2xl items-start gap-3 rounded-[18px] border border-border/80 bg-background px-4 py-4">
+            <Checkbox
+              id="sendSignedCopyToRecipients"
+              checked={sendSignedCopyToRecipients}
+              onCheckedChange={(checked) => setSendSignedCopyToRecipients(checked === true)}
+              className="mt-1"
+            />
+            <div className="space-y-1">
+              <Label htmlFor="sendSignedCopyToRecipients" className="cursor-pointer">
+                Enviar copia final a firmantes
+              </Label>
+              <p className="text-sm text-muted-foreground">
+                Cuando todos hayan firmado, cada destinatario recibira un link seguro para descargar el PDF final.
+              </p>
+            </div>
+          </div>
+          {sendSignedCopyToRecipients ? <input type="hidden" name="sendSignedCopyToRecipients" value="on" /> : null}
         </SectionCard>
 
         <div className="flex flex-wrap items-center justify-end gap-3">

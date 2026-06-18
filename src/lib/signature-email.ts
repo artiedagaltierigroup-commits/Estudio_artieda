@@ -3,6 +3,7 @@ interface SignatureEmailContentParams {
   message?: string | null;
   signingUrl: string;
   emailOpenUrl?: string | null;
+  ctaLabel?: string;
 }
 
 interface SendSignatureRequestEmailParams extends SignatureEmailContentParams {
@@ -36,6 +37,10 @@ export function buildEmailOpenUrl(token: string, baseUrl = process.env.NEXT_PUBL
   return `${baseUrl.replace(/\/$/, "")}/api/signatures/email-open/${token}`;
 }
 
+export function buildFinalCopyUrl(token: string, baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000") {
+  return `${baseUrl.replace(/\/$/, "")}/api/signatures/final-copy/${token}`;
+}
+
 export function buildRecipientSignatureEmail(params: BuildRecipientSignatureEmailParams): SendSignatureRequestEmailParams {
   return {
     to: params.recipientEmail,
@@ -46,13 +51,30 @@ export function buildRecipientSignatureEmail(params: BuildRecipientSignatureEmai
   };
 }
 
+export function buildSignedDocumentCopyEmail(params: {
+  recipientEmail: string;
+  subject: string;
+  token: string;
+  baseUrl?: string;
+}): SendSignatureRequestEmailParams {
+  return {
+    to: params.recipientEmail,
+    subject: `Documento firmado: ${params.subject}`,
+    message: "El documento ya fue firmado por todas las personas. Podes descargar la copia final desde este link seguro.",
+    signingUrl: buildFinalCopyUrl(params.token, params.baseUrl),
+    ctaLabel: "Descargar documento firmado",
+  };
+}
+
 export function buildEmailText(params: SignatureEmailContentParams) {
+  const label = params.ctaLabel ?? ctaLabel;
+
   return [
     params.subject,
     "",
     params.message ?? "Te enviamos este documento para revisar y firmar electronicamente.",
     "",
-    ctaLabel,
+    label,
     params.signingUrl,
     "",
     "La apertura de correo puede no detectarse si tu cliente bloquea imagenes.",
@@ -65,6 +87,7 @@ export function buildEmailHtml(params: SignatureEmailContentParams) {
     params.message ?? "Te enviamos este documento para revisar y firmar electronicamente."
   );
   const escapedUrl = escapeHtml(params.signingUrl);
+  const escapedCtaLabel = escapeHtml(params.ctaLabel ?? ctaLabel);
   const trackingPixel = params.emailOpenUrl
     ? `<img src="${escapeHtml(params.emailOpenUrl)}" width="1" height="1" alt="" style="display:none" />`
     : "";
@@ -75,7 +98,7 @@ export function buildEmailHtml(params: SignatureEmailContentParams) {
       <p style="margin:0 0 20px">${escapedMessage}</p>
       <p style="margin:0 0 20px">
         <a href="${escapedUrl}" style="display:inline-block;background:#7a384f;color:white;padding:12px 18px;border-radius:14px;text-decoration:none;font-weight:700">
-          ${ctaLabel}
+          ${escapedCtaLabel}
         </a>
       </p>
       <p style="font-size:12px;color:#6f6468;margin:0">

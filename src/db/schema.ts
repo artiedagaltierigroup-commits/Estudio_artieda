@@ -410,6 +410,8 @@ export const signatureRequests = pgTable(
     status: signatureRequestStatusEnum("status").notNull().default("DRAFT"),
     tokenHash: text("token_hash").notNull(),
     tokenExpiresAt: timestamp("token_expires_at", { withTimezone: true }).notNull(),
+    sendSignedCopyToRecipients: boolean("send_signed_copy_to_recipients").notNull().default(false),
+    signedCopySentAt: timestamp("signed_copy_sent_at", { withTimezone: true }),
     sentAt: timestamp("sent_at", { withTimezone: true }),
     signedAt: timestamp("signed_at", { withTimezone: true }),
     cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
@@ -444,6 +446,9 @@ export const signatureRecipients = pgTable(
     status: signatureRecipientStatusEnum("status").notNull().default("DRAFT"),
     tokenHash: text("token_hash").notNull(),
     tokenExpiresAt: timestamp("token_expires_at", { withTimezone: true }).notNull(),
+    signedCopyTokenHash: text("signed_copy_token_hash"),
+    signedCopyTokenExpiresAt: timestamp("signed_copy_token_expires_at", { withTimezone: true }),
+    signedCopySentAt: timestamp("signed_copy_sent_at", { withTimezone: true }),
     sentAt: timestamp("sent_at", { withTimezone: true }),
     signedAt: timestamp("signed_at", { withTimezone: true }),
     cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
@@ -462,6 +467,7 @@ export const signatureRecipients = pgTable(
     emailIdx: index("signature_recipients_email_idx").on(table.email),
     requestSortIdx: index("signature_recipients_request_sort_idx").on(table.signatureRequestId, table.sortOrder),
     tokenHashIdx: uniqueIndex("signature_recipients_token_hash_idx").on(table.tokenHash),
+    signedCopyTokenHashIdx: uniqueIndex("signature_recipients_signed_copy_token_hash_idx").on(table.signedCopyTokenHash),
   })
 );
 

@@ -1,6 +1,6 @@
 "use server";
 
-import { createHash } from "crypto";
+import { createHash, randomBytes } from "crypto";
 import { and, eq } from "drizzle-orm";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
@@ -13,14 +13,27 @@ import {
   hashBufferSha256,
   SIGNATURE_BUCKET,
 } from "../lib/signature-files";
+import { buildSignedDocumentCopyEmail, sendSignatureRequestEmail } from "../lib/signature-email";
 import { embedRecipientSignaturesInPdf } from "../lib/signature-pdf";
 import { getAggregateSignatureStatus } from "../lib/signature-recipients";
 import { createSupabaseAdminClient } from "../lib/supabase/admin";
 
 type PublicSignatureEventType = "link_opened" | "signing_started" | "signing_interrupted" | "signed";
 
+const FINAL_COPY_EXPIRATION_DAYS = 30;
+
 function hashToken(token: string) {
   return createHash("sha256").update(token).digest("hex");
+}
+
+function buildFinalCopyToken() {
+  return randomBytes(32).toString("hex");
+}
+
+function buildFinalCopyTokenExpiration(now = new Date()) {
+  const expiresAt = new Date(now);
+  expiresAt.setDate(expiresAt.getDate() + FINAL_COPY_EXPIRATION_DAYS);
+  return expiresAt;
 }
 
 function isTerminalRecipientStatus(status: string) {
@@ -138,6 +151,56 @@ async function generateSignedPdfForRequest(requestId: string) {
     .where(eq(signatureDocuments.id, request.document.id));
 
   return signed;
+}
+
+async function sendSignedDocumentCopiesToRecipients(requestId: string) {
+  const request = await db.query.signatureRequests.findFirst({
+    where: (item, { eq: eqOperator }) => eqOperator(item.id, requestId),
+    with: {
+      document: true,
+      recipients: {
+        orderBy: (recipient, { asc }) => [asc(recipient.sortOrder)],
+      },
+    },
+  });
+
+  if (!request?.sendSignedCopyToRecipients || request.signedCopySentAt || !request.document?.signedStoragePath) {
+    return;
+  }
+
+  const now = new Date();
+  const expiresAt = buildFinalCopyTokenExpiration(now);
+
+  for (const recipient of request.recipients) {
+    const token = buildFinalCopyToken();
+    const tokenHash = hashToken(token);
+
+    await db
+      .update(signatureRecipients)
+      .set({
+        signedCopyTokenHash: tokenHash,
+        signedCopyTokenExpiresAt: expiresAt,
+        signedCopySentAt: now,
+        updatedAt: now,
+      })
+      .where(eq(signatureRecipients.id, recipient.id));
+
+    await sendSignatureRequestEmail(
+      buildSignedDocumentCopyEmail({
+        recipientEmail: recipient.email,
+        subject: request.subject,
+        token,
+      })
+    );
+  }
+
+  await db
+    .update(signatureRequests)
+    .set({
+      signedCopySentAt: now,
+      updatedAt: now,
+    })
+    .where(eq(signatureRequests.id, requestId));
 }
 
 async function getRecipientByToken(token: string) {
@@ -335,7 +398,14 @@ export async function submitPublicSignature(token: string, formData: FormData) {
 
   const aggregateStatus = await updateRequestAggregateStatus(recipient.signatureRequestId, signedAt);
   if (aggregateStatus === "SIGNED") {
-    await generateSignedPdfForRequest(recipient.signatureRequestId);
+    const signedDocument = await generateSignedPdfForRequest(recipient.signatureRequestId);
+    if (signedDocument) {
+      try {
+        await sendSignedDocumentCopiesToRecipients(recipient.signatureRequestId);
+      } catch (error) {
+        console.warn("Could not send final signed document copies", error);
+      }
+    }
   }
 
   await createPublicEvent({

@@ -4,6 +4,7 @@ import {
   buildDefaultSignatureSubject,
   buildRecipientName,
   normalizeSignatureEmail,
+  parseSendSignedCopyToRecipients,
   parseSignatureRecipientsFromFormData,
   splitPersonName,
   validateSignatureRecipients,
@@ -18,6 +19,16 @@ describe("signature action helpers", () => {
 
   it("normalizes recipient emails", () => {
     expect(normalizeSignatureEmail(" CLIENTE@MAIL.COM ")).toBe("cliente@mail.com");
+  });
+
+  it("parses the final signed copy option from form data", () => {
+    const enabled = new FormData();
+    enabled.set("sendSignedCopyToRecipients", "on");
+
+    const disabled = new FormData();
+
+    expect(parseSendSignedCopyToRecipients(enabled)).toBe(true);
+    expect(parseSendSignedCopyToRecipients(disabled)).toBe(false);
   });
 
   it("builds recipient names from first and last name", () => {
