@@ -4,7 +4,7 @@ import { signatureEvents } from "@/db/schema";
 import { SIGNATURE_BUCKET } from "@/lib/signature-files";
 import { createClient } from "@/lib/supabase/server";
 
-type DownloadArtifact = "signed-document" | "signature-image" | "certificate";
+type DownloadArtifact = "signed-document" | "signature-image" | "certificate" | "partial-document";
 
 export function jsonError(message: string, status: number) {
   return Response.json({ error: message }, { status });
@@ -34,6 +34,14 @@ export async function getAuthenticatedSignatureRequest(id: string) {
       client: true,
       case: true,
       document: true,
+      recipients: {
+        orderBy: (recipient, { asc }) => [asc(recipient.sortOrder)],
+        with: {
+          placements: {
+            orderBy: (placement, { asc }) => [asc(placement.sortOrder)],
+          },
+        },
+      },
       events: {
         orderBy: (event, { asc }) => [asc(event.createdAt)],
       },

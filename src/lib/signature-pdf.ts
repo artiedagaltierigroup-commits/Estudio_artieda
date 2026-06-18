@@ -24,6 +24,26 @@ interface EmbedSignatureParams {
   };
 }
 
+interface SignaturePlacementInput {
+  pageNumber: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+interface RecipientSignatureInput {
+  signerName: string;
+  signedAt: Date;
+  signaturePngBytes: Uint8Array;
+  placements: SignaturePlacementInput[];
+}
+
+interface EmbedRecipientSignaturesParams {
+  originalPdfBytes: Uint8Array;
+  recipients: RecipientSignatureInput[];
+}
+
 export function toPdfPlacement(params: NormalizedPlacement) {
   const width = params.pageWidth * params.width;
   const height = params.pageHeight * params.height;
@@ -33,39 +53,45 @@ export function toPdfPlacement(params: NormalizedPlacement) {
   return { x, y, width, height };
 }
 
-export async function embedSignatureInPdf(params: EmbedSignatureParams) {
+export async function embedRecipientSignaturesInPdf(params: EmbedRecipientSignaturesParams) {
   const pdf = await PDFDocument.load(params.originalPdfBytes);
   const pages = pdf.getPages();
-  const pageIndex = Math.max(0, Math.min(params.pageNumber - 1, pages.length - 1));
-  const page = pages[pageIndex];
-  const pageSize = page.getSize();
-  const placement = toPdfPlacement({
-    pageWidth: pageSize.width,
-    pageHeight: pageSize.height,
-    x: params.placement.x,
-    y: params.placement.y,
-    width: params.placement.width,
-    height: params.placement.height,
-  });
-
-  const signatureImage = await pdf.embedPng(params.signaturePngBytes);
-  page.drawImage(signatureImage, {
-    x: placement.x,
-    y: placement.y,
-    width: placement.width,
-    height: placement.height,
-  });
-
   const font = await pdf.embedFont(StandardFonts.Helvetica);
-  const footer = `Firmado electronicamente por ${params.signerName} - ${params.signedAt.toISOString()}`;
-  page.drawText(footer, {
-    x: placement.x,
-    y: Math.max(12, placement.y - 14),
-    size: 7,
-    font,
-    color: rgb(0.28, 0.23, 0.25),
-    maxWidth: Math.max(placement.width, 220),
-  });
+
+  for (const recipient of params.recipients) {
+    const signatureImage = await pdf.embedPng(recipient.signaturePngBytes);
+
+    for (const recipientPlacement of recipient.placements) {
+      const pageIndex = Math.max(0, Math.min(recipientPlacement.pageNumber - 1, pages.length - 1));
+      const page = pages[pageIndex];
+      const pageSize = page.getSize();
+      const placement = toPdfPlacement({
+        pageWidth: pageSize.width,
+        pageHeight: pageSize.height,
+        x: recipientPlacement.x,
+        y: recipientPlacement.y,
+        width: recipientPlacement.width,
+        height: recipientPlacement.height,
+      });
+
+      page.drawImage(signatureImage, {
+        x: placement.x,
+        y: placement.y,
+        width: placement.width,
+        height: placement.height,
+      });
+
+      const footer = `Firmado electronicamente por ${recipient.signerName} - ${recipient.signedAt.toISOString()}`;
+      page.drawText(footer, {
+        x: placement.x,
+        y: Math.max(12, placement.y - 14),
+        size: 7,
+        font,
+        color: rgb(0.28, 0.23, 0.25),
+        maxWidth: Math.max(placement.width, 220),
+      });
+    }
+  }
 
   const signedPdfBytes = await pdf.save();
   const signedSha256 = createHash("sha256").update(signedPdfBytes).digest("hex");
@@ -74,4 +100,26 @@ export async function embedSignatureInPdf(params: EmbedSignatureParams) {
     signedPdfBytes,
     signedSha256,
   };
+}
+
+export async function embedSignatureInPdf(params: EmbedSignatureParams) {
+  return embedRecipientSignaturesInPdf({
+    originalPdfBytes: params.originalPdfBytes,
+    recipients: [
+      {
+        signerName: params.signerName,
+        signedAt: params.signedAt,
+        signaturePngBytes: params.signaturePngBytes,
+        placements: [
+          {
+            pageNumber: params.pageNumber,
+            x: params.placement.x,
+            y: params.placement.y,
+            width: params.placement.width,
+            height: params.placement.height,
+          },
+        ],
+      },
+    ],
+  });
 }

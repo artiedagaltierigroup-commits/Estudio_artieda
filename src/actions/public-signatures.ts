@@ -5,9 +5,15 @@ import { and, eq } from "drizzle-orm";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { db } from "../db";
-import { signatureEvents, signatureRecipients, signatureRequests } from "../db/schema";
+import { signatureDocuments, signatureEvents, signatureRecipients, signatureRequests } from "../db/schema";
 import { shouldOfferSavedSignature } from "../lib/client-saved-signatures";
-import { buildSignatureStoragePath, hashBufferSha256, SIGNATURE_BUCKET } from "../lib/signature-files";
+import {
+  buildSignatureStoragePath,
+  buildSignedDocumentRetention,
+  hashBufferSha256,
+  SIGNATURE_BUCKET,
+} from "../lib/signature-files";
+import { embedRecipientSignaturesInPdf } from "../lib/signature-pdf";
 import { getAggregateSignatureStatus } from "../lib/signature-recipients";
 import { createClient } from "../lib/supabase/server";
 
@@ -36,6 +42,102 @@ function decodeDataUrl(dataUrl: string) {
 
 function getRecipientDisplayName(recipient: { firstName: string; lastName: string; fullName: string | null; email: string }) {
   return recipient.fullName ?? ([recipient.firstName, recipient.lastName].filter(Boolean).join(" ") || recipient.email);
+}
+
+async function generateSignedPdfForRequest(requestId: string) {
+  const request = await db.query.signatureRequests.findFirst({
+    where: (item, { eq: eqOperator }) => eqOperator(item.id, requestId),
+    with: {
+      document: true,
+      recipients: {
+        orderBy: (recipient, { asc }) => [asc(recipient.sortOrder)],
+        with: {
+          placements: {
+            orderBy: (placement, { asc }) => [asc(placement.sortOrder)],
+          },
+        },
+      },
+    },
+  });
+  if (!request?.document) return null;
+
+  const signedRecipients = request.recipients.filter(
+    (recipient) => recipient.status === "SIGNED" && recipient.signatureStoragePath && recipient.placements.length > 0
+  );
+  if (signedRecipients.length === 0) return null;
+
+  const supabase = await createClient();
+  const { data: originalPdfData, error: originalPdfError } = await supabase.storage
+    .from(SIGNATURE_BUCKET)
+    .download(request.document.originalStoragePath);
+  if (originalPdfError || !originalPdfData) return null;
+
+  const recipientInputs = [];
+  for (const signedRecipient of signedRecipients) {
+    const { data: signatureData, error: signatureError } = await supabase.storage
+      .from(SIGNATURE_BUCKET)
+      .download(signedRecipient.signatureStoragePath!);
+    if (signatureError || !signatureData) continue;
+
+    recipientInputs.push({
+      signerName: getRecipientDisplayName(signedRecipient),
+      signedAt: signedRecipient.signedAt ?? new Date(),
+      signaturePngBytes: Buffer.from(await signatureData.arrayBuffer()),
+      placements: signedRecipient.placements.map((placement) => ({
+        pageNumber: placement.pageNumber,
+        x: Number(placement.placementX),
+        y: Number(placement.placementY),
+        width: Number(placement.placementWidth),
+        height: Number(placement.placementHeight),
+      })),
+    });
+  }
+  if (recipientInputs.length === 0) return null;
+
+  const signed = await embedRecipientSignaturesInPdf({
+    originalPdfBytes: Buffer.from(await originalPdfData.arrayBuffer()),
+    recipients: recipientInputs,
+  });
+  const signedStoragePath = buildSignatureStoragePath({
+    userId: request.userId,
+    requestId: request.id,
+    kind: "signed",
+    fileName: `firmado-${request.document.originalFileName}`,
+  });
+
+  const signedUpload = await supabase.storage
+    .from(SIGNATURE_BUCKET)
+    .upload(signedStoragePath, Buffer.from(signed.signedPdfBytes), {
+      contentType: "application/pdf",
+      upsert: true,
+    });
+  if (signedUpload.error) return null;
+
+  const signedRetention = buildSignedDocumentRetention({
+    originalStoragePath: request.document.originalStoragePath,
+    signedStoragePath,
+  });
+  if (signedRetention.storagePathsToDelete.length > 0) {
+    const removal = await supabase.storage.from(SIGNATURE_BUCKET).remove(signedRetention.storagePathsToDelete);
+    if (removal.error) {
+      console.warn("Could not remove original signature PDF after all recipients signed", removal.error);
+    }
+  }
+
+  const firstSignedRecipient = signedRecipients[0];
+  await db
+    .update(signatureDocuments)
+    .set({
+      originalStoragePath: signedRetention.originalStoragePath,
+      signedStoragePath,
+      signedSha256: signed.signedSha256,
+      signatureStoragePath: firstSignedRecipient.signatureStoragePath,
+      signatureSha256: firstSignedRecipient.signatureSha256,
+      updatedAt: new Date(),
+    })
+    .where(eq(signatureDocuments.id, request.document.id));
+
+  return signed;
 }
 
 async function getRecipientByToken(token: string) {
@@ -232,6 +334,9 @@ export async function submitPublicSignature(token: string, formData: FormData) {
     .where(and(eq(signatureRecipients.id, recipient.id), eq(signatureRecipients.tokenHash, hashToken(token))));
 
   const aggregateStatus = await updateRequestAggregateStatus(recipient.signatureRequestId, signedAt);
+  if (aggregateStatus === "SIGNED") {
+    await generateSignedPdfForRequest(recipient.signatureRequestId);
+  }
 
   await createPublicEvent({
     token,

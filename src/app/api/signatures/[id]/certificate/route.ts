@@ -10,6 +10,15 @@ import {
   logSignatureArtifactDownload,
 } from "../downloads";
 
+function getRecipientDisplayName(recipient: {
+  firstName: string;
+  lastName: string;
+  fullName: string | null;
+  email: string;
+}) {
+  return recipient.fullName ?? ([recipient.firstName, recipient.lastName].filter(Boolean).join(" ") || recipient.email);
+}
+
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const result = await getAuthenticatedSignatureRequest(id);
@@ -20,16 +29,33 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     return jsonError("La constancia todavia no esta disponible", 409);
   }
 
+  const signedRecipients = request.recipients.filter((recipient) => recipient.status === "SIGNED");
+  const signerName =
+    signedRecipients.length > 0
+      ? signedRecipients.map((recipient) => getRecipientDisplayName(recipient)).join(", ")
+      : request.recipientName;
+  const signerEmail =
+    signedRecipients.length > 0
+      ? signedRecipients.map((recipient) => recipient.email).join(", ")
+      : request.recipientEmail;
+  const signatureSha256 =
+    signedRecipients.length > 0
+      ? signedRecipients
+          .map((recipient) => recipient.signatureSha256)
+          .filter(Boolean)
+          .join(", ")
+      : request.document.signatureSha256;
+
   const certificateData = buildSignatureCertificateData({
     requestId: request.id,
     subject: request.subject,
-    signerName: request.recipientName,
-    signerEmail: request.recipientEmail,
+    signerName,
+    signerEmail,
     clientName: request.client?.name,
     caseTitle: request.case?.title,
     originalSha256: request.document.originalSha256,
     signedSha256: request.document.signedSha256,
-    signatureSha256: request.document.signatureSha256,
+    signatureSha256,
     signedAt: request.signedAt,
     events: request.events,
   });
