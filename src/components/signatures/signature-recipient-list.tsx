@@ -49,7 +49,9 @@ export function SignatureRecipientList({
           Agregar destinatario
         </Button>
         {reachedLimit ? (
-          <p className="text-sm font-medium text-muted-foreground">No se pueden agregar mas destinatarios.</p>
+          <p role="status" className="text-sm font-medium text-muted-foreground">
+            No se pueden agregar mas destinatarios.
+          </p>
         ) : null}
       </div>
     </div>

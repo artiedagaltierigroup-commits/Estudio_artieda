@@ -78,7 +78,7 @@ export function PublicSignaturePad({ token }: PublicSignaturePadProps) {
 
   if (success) {
     return (
-      <div className="rounded-[28px] border border-[#b8d8c5] bg-[#f4fbf6] p-6 text-center">
+      <div role="status" className="rounded-[28px] border border-[#b8d8c5] bg-[#f4fbf6] p-6 text-center">
         <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-[#48745f] text-white">
           <Check className="h-5 w-5" />
         </div>
@@ -121,7 +121,7 @@ export function PublicSignaturePad({ token }: PublicSignaturePadProps) {
       </div>
 
       {error ? (
-        <div className="rounded-2xl border border-[#e8b6bc] bg-[#fff4f5] px-3 py-2 text-sm text-[#9d4d4d]">
+        <div role="alert" className="rounded-2xl border border-[#e8b6bc] bg-[#fff4f5] px-3 py-2 text-sm text-[#9d4d4d]">
           {error}
         </div>
       ) : null}

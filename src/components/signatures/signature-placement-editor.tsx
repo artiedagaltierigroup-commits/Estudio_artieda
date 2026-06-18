@@ -80,7 +80,11 @@ export function SignaturePlacementEditor({
       </div>
 
       {missingRecipientLabels.length > 0 ? (
-        <div className="rounded-[18px] border border-[#d7c394] bg-[#fff9e8] px-4 py-3 text-sm text-[#775f22]">
+        <div
+          role="status"
+          aria-live="polite"
+          className="rounded-[18px] border border-[#d7c394] bg-[#fff9e8] px-4 py-3 text-sm text-[#775f22]"
+        >
           Falta ubicar firma para: {missingRecipientLabels.join(", ")}.
         </div>
       ) : null}
