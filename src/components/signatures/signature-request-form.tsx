@@ -88,6 +88,7 @@ export function SignatureRequestForm({
   const [fileSize, setFileSize] = useState("");
   const [fileError, setFileError] = useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [placementsReady, setPlacementsReady] = useState(false);
   const [subject, setSubject] = useState("Solicitud de firma");
   const [subjectTouched, setSubjectTouched] = useState(false);
 
@@ -131,7 +132,17 @@ export function SignatureRequestForm({
                 if (!subjectTouched) setSubject(buildDefaultSubject(file.name));
               }}
             />
-            <PdfPlacementSelector previewUrl={previewUrl} />
+            <PdfPlacementSelector
+              previewUrl={previewUrl}
+              recipients={recipients.map((recipient, index) => ({
+                id: recipient.id,
+                label:
+                  [recipient.firstName, recipient.lastName].filter(Boolean).join(" ") ||
+                  recipient.email ||
+                  `Destinatario ${index + 1}`,
+              }))}
+              onReadyChange={setPlacementsReady}
+            />
           </div>
         </SectionCard>
 
@@ -195,7 +206,7 @@ export function SignatureRequestForm({
           <Button asChild variant="outline">
             <Link href={cancelHref}>Cancelar</Link>
           </Button>
-          <SubmitButton pendingLabel="Creando solicitud...">
+          <SubmitButton pendingLabel="Creando solicitud..." disabled={!previewUrl || !placementsReady}>
             <Save className="h-4 w-4" />
             Crear y enviar
           </SubmitButton>

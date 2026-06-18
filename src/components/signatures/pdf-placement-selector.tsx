@@ -1,47 +1,159 @@
 "use client";
 
-import { Label } from "@/components/ui/label";
+import { SignaturePlacementEditor } from "@/components/signatures/signature-placement-editor";
 import { cn } from "@/lib/utils";
+import { getSignaturePlacementVisualState } from "@/lib/signature-placement-colors";
 import { Crosshair } from "lucide-react";
-import { useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
+
+export interface PdfPlacementRecipient {
+  id: string;
+  label: string;
+}
 
 interface PdfPlacementSelectorProps {
   previewUrl: string | null;
+  recipients?: PdfPlacementRecipient[];
+  onReadyChange?: (ready: boolean) => void;
+}
+
+interface SignaturePlacementDraft {
+  id: string;
+  recipientId: string;
+  pageNumber: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
 }
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
 
-export function PdfPlacementSelector({ previewUrl }: PdfPlacementSelectorProps) {
-  const [placement, setPlacement] = useState({
+function createPlacementId() {
+  return `placement-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function buildDefaultPlacement(recipientId: string, index = 0, id = `${recipientId}-placement-${index}`) {
+  return {
+    id,
+    recipientId,
     pageNumber: 1,
-    x: 0.58,
-    y: 0.72,
+    x: clamp(0.58 - (index % 3) * 0.04, 0, 0.72),
+    y: clamp(0.72 - (index % 3) * 0.05, 0, 0.88),
     width: 0.28,
     height: 0.12,
-  });
+  };
+}
 
-  const rectangleStyle = useMemo(
-    () => ({
-      left: `${placement.x * 100}%`,
-      top: `${placement.y * 100}%`,
-      width: `${placement.width * 100}%`,
-      height: `${placement.height * 100}%`,
-    }),
-    [placement]
+function getRecipientLabel(recipient: PdfPlacementRecipient, index: number) {
+  return recipient.label.trim() || `Destinatario ${index + 1}`;
+}
+
+export function PdfPlacementSelector({ previewUrl, recipients = [], onReadyChange }: PdfPlacementSelectorProps) {
+  const normalizedRecipients = useMemo(
+    () => (recipients.length > 0 ? recipients : [{ id: "legacy-recipient", label: "Firma" }]),
+    [recipients]
+  );
+  const [activeRecipientId, setActiveRecipientId] = useState(normalizedRecipients[0]?.id ?? "");
+  const [placements, setPlacements] = useState<SignaturePlacementDraft[]>(() =>
+    normalizedRecipients[0] ? [buildDefaultPlacement(normalizedRecipients[0].id)] : []
+  );
+  const [activePlacementId, setActivePlacementId] = useState(() => placements[0]?.id ?? "");
+
+  const recipientIndexById = useMemo(
+    () => new Map(normalizedRecipients.map((recipient, index) => [recipient.id, index])),
+    [normalizedRecipients]
   );
 
-  function updatePlacement(key: "x" | "y" | "width" | "height", value: number) {
-    setPlacement((current) => {
-      const next = { ...current, [key]: value };
-      next.width = clamp(next.width, 0.08, 0.8);
-      next.height = clamp(next.height, 0.05, 0.4);
-      next.x = clamp(next.x, 0, 1 - next.width);
-      next.y = clamp(next.y, 0, 1 - next.height);
+  const activePlacement = placements.find((placement) => placement.id === activePlacementId) ?? null;
+  const activeRecipientPlacements = useMemo(
+    () => placements.filter((placement) => placement.recipientId === activeRecipientId),
+    [activeRecipientId, placements]
+  );
+  const missingRecipients = useMemo(
+    () => normalizedRecipients.filter((recipient) => !placements.some((placement) => placement.recipientId === recipient.id)),
+    [normalizedRecipients, placements]
+  );
+
+  useEffect(() => {
+    const validRecipientIds = new Set(normalizedRecipients.map((recipient) => recipient.id));
+
+    setPlacements((current) => {
+      const kept = current.filter((placement) => validRecipientIds.has(placement.recipientId));
+      if (kept.length === 0 && normalizedRecipients[0]) return [buildDefaultPlacement(normalizedRecipients[0].id)];
+      if (kept.length === current.length) return current;
+      return kept;
+    });
+
+    setActiveRecipientId((current) => (validRecipientIds.has(current) ? current : normalizedRecipients[0]?.id ?? ""));
+  }, [normalizedRecipients]);
+
+  useEffect(() => {
+    const activeExists = activeRecipientPlacements.some((placement) => placement.id === activePlacementId);
+    if (!activeExists) setActivePlacementId(activeRecipientPlacements[0]?.id ?? "");
+  }, [activePlacementId, activeRecipientPlacements]);
+
+  useEffect(() => {
+    onReadyChange?.(normalizedRecipients.length > 0 && missingRecipients.length === 0);
+  }, [missingRecipients.length, normalizedRecipients.length, onReadyChange]);
+
+  function updateActivePlacement(key: "x" | "y" | "width" | "height", value: number) {
+    if (!activePlacement) return;
+
+    setPlacements((current) =>
+      current.map((placement) => {
+        if (placement.id !== activePlacement.id) return placement;
+
+        const next = { ...placement, [key]: value };
+        next.width = clamp(next.width, 0.08, 0.8);
+        next.height = clamp(next.height, 0.05, 0.4);
+        next.x = clamp(next.x, 0, 1 - next.width);
+        next.y = clamp(next.y, 0, 1 - next.height);
+        return next;
+      })
+    );
+  }
+
+  function handlePreviewClick(event: React.MouseEvent<HTMLDivElement>) {
+    if (!previewUrl || !activePlacement) return;
+
+    const bounds = event.currentTarget.getBoundingClientRect();
+    const x = (event.clientX - bounds.left) / bounds.width - activePlacement.width / 2;
+    const y = (event.clientY - bounds.top) / bounds.height - activePlacement.height / 2;
+    updateActivePlacement("x", x);
+    updateActivePlacement("y", y);
+  }
+
+  function handleActiveRecipientChange(recipientId: string) {
+    setActiveRecipientId(recipientId);
+    setActivePlacementId(placements.find((placement) => placement.recipientId === recipientId)?.id ?? "");
+  }
+
+  function handleAddPlacement() {
+    if (!activeRecipientId) return;
+
+    setPlacements((current) => {
+      const nextIndex = current.filter((placement) => placement.recipientId === activeRecipientId).length;
+      const nextPlacement = buildDefaultPlacement(activeRecipientId, nextIndex, createPlacementId());
+      setActivePlacementId(nextPlacement.id);
+      return [...current, nextPlacement];
+    });
+  }
+
+  function handleDeletePlacement() {
+    if (!activePlacement) return;
+
+    setPlacements((current) => {
+      const next = current.filter((placement) => placement.id !== activePlacement.id);
+      const nextActive = next.find((placement) => placement.recipientId === activeRecipientId);
+      setActivePlacementId(nextActive?.id ?? "");
       return next;
     });
   }
+
+  const firstPlacement = placements[0] ?? buildDefaultPlacement(normalizedRecipients[0]?.id ?? "legacy-recipient");
 
   return (
     <div className="space-y-4">
@@ -50,17 +162,7 @@ export function PdfPlacementSelector({ previewUrl }: PdfPlacementSelectorProps) 
           "relative mx-auto aspect-[3/4] w-full max-w-xl overflow-hidden rounded-[28px] border border-border/80 bg-white shadow-[0_24px_80px_-62px_rgba(122,56,79,0.35)]",
           !previewUrl && "border-dashed bg-muted/20"
         )}
-        onClick={(event) => {
-          if (!previewUrl) return;
-          const bounds = event.currentTarget.getBoundingClientRect();
-          const x = (event.clientX - bounds.left) / bounds.width - placement.width / 2;
-          const y = (event.clientY - bounds.top) / bounds.height - placement.height / 2;
-          setPlacement((current) => ({
-            ...current,
-            x: clamp(x, 0, 1 - current.width),
-            y: clamp(y, 0, 1 - current.height),
-          }));
-        }}
+        onClick={handlePreviewClick}
       >
         {previewUrl ? (
           <object data={previewUrl} type="application/pdf" className="h-full w-full" aria-label="Vista previa PDF">
@@ -75,82 +177,107 @@ export function PdfPlacementSelector({ previewUrl }: PdfPlacementSelectorProps) 
           </div>
         )}
 
-        {previewUrl ? (
-          <div
-            className="pointer-events-none absolute rounded-[14px] border-2 border-[#9a4e69] bg-[#f7d6e0]/35 shadow-[0_0_0_9999px_rgba(255,255,255,0.18)]"
-            style={rectangleStyle}
-          >
-            <span className="absolute -top-7 left-0 rounded-full bg-[#9a4e69] px-3 py-1 text-[0.68rem] font-semibold text-white">
-              Firma
-            </span>
-          </div>
-        ) : null}
+        {previewUrl
+          ? placements.map((placement) => {
+              const recipientIndex = recipientIndexById.get(placement.recipientId) ?? 0;
+              const recipient = normalizedRecipients[recipientIndex];
+              const isActiveRecipient = placement.recipientId === activeRecipientId;
+              const isActivePlacement = placement.id === activePlacementId;
+              const visualState = getSignaturePlacementVisualState(recipientIndex, isActiveRecipient);
+              const recipientPlacements = placements.filter((item) => item.recipientId === placement.recipientId);
+              const placementNumber = recipientPlacements.findIndex((item) => item.id === placement.id) + 1;
+
+              return (
+                <button
+                  key={placement.id}
+                  type="button"
+                  className={cn(
+                    "absolute rounded-[14px] text-left transition-all",
+                    isActivePlacement && "ring-2 ring-white ring-offset-2 ring-offset-transparent"
+                  )}
+                  style={{
+                    left: `${placement.x * 100}%`,
+                    top: `${placement.y * 100}%`,
+                    width: `${placement.width * 100}%`,
+                    height: `${placement.height * 100}%`,
+                    border: `${visualState.borderWidth}px solid ${visualState.color.border}`,
+                    backgroundColor: visualState.color.background,
+                    boxShadow: visualState.shadow,
+                    opacity: visualState.opacity,
+                  }}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setActiveRecipientId(placement.recipientId);
+                    setActivePlacementId(placement.id);
+                  }}
+                  aria-label={`Seleccionar espacio ${placementNumber} de ${getRecipientLabel(recipient, recipientIndex)}`}
+                >
+                  <span
+                    className="absolute -top-7 left-0 max-w-[13rem] truncate rounded-full px-3 py-1 text-[0.68rem] font-semibold text-white"
+                    style={{ backgroundColor: visualState.color.label }}
+                  >
+                    {getRecipientLabel(recipient, recipientIndex)} #{placementNumber}
+                  </span>
+                </button>
+              );
+            })
+          : null}
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="space-y-2">
-          <Label htmlFor="placement-x">Horizontal</Label>
-          <input
-            id="placement-x"
-            type="range"
-            min="0"
-            max="1"
-            step="0.01"
-            value={placement.x}
-            onChange={(event) => updatePlacement("x", Number(event.target.value))}
-            className="w-full accent-primary"
-            disabled={!previewUrl}
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="placement-y">Vertical</Label>
-          <input
-            id="placement-y"
-            type="range"
-            min="0"
-            max="1"
-            step="0.01"
-            value={placement.y}
-            onChange={(event) => updatePlacement("y", Number(event.target.value))}
-            className="w-full accent-primary"
-            disabled={!previewUrl}
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="placement-width">Ancho</Label>
-          <input
-            id="placement-width"
-            type="range"
-            min="0.08"
-            max="0.8"
-            step="0.01"
-            value={placement.width}
-            onChange={(event) => updatePlacement("width", Number(event.target.value))}
-            className="w-full accent-primary"
-            disabled={!previewUrl}
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="placement-height">Alto</Label>
-          <input
-            id="placement-height"
-            type="range"
-            min="0.05"
-            max="0.4"
-            step="0.01"
-            value={placement.height}
-            onChange={(event) => updatePlacement("height", Number(event.target.value))}
-            className="w-full accent-primary"
-            disabled={!previewUrl}
-          />
-        </div>
-      </div>
+      <SignaturePlacementEditor
+        recipients={normalizedRecipients.map((recipient, index) => ({
+          id: recipient.id,
+          label: getRecipientLabel(recipient, index),
+        }))}
+        activeRecipientId={activeRecipientId}
+        activePlacement={activePlacement}
+        missingRecipientLabels={missingRecipients.map((recipient, index) => getRecipientLabel(recipient, index))}
+        canDeletePlacement={Boolean(activePlacement)}
+        onActiveRecipientChange={handleActiveRecipientChange}
+        onAddPlacement={handleAddPlacement}
+        onDeletePlacement={handleDeletePlacement}
+        onPlacementChange={updateActivePlacement}
+      />
 
-      <input type="hidden" name="pageNumber" value={placement.pageNumber} />
-      <input type="hidden" name="placementX" value={placement.x.toFixed(4)} />
-      <input type="hidden" name="placementY" value={placement.y.toFixed(4)} />
-      <input type="hidden" name="placementWidth" value={placement.width.toFixed(4)} />
-      <input type="hidden" name="placementHeight" value={placement.height.toFixed(4)} />
+      <input type="hidden" name="pageNumber" value={firstPlacement.pageNumber} />
+      <input type="hidden" name="placementX" value={firstPlacement.x.toFixed(4)} />
+      <input type="hidden" name="placementY" value={firstPlacement.y.toFixed(4)} />
+      <input type="hidden" name="placementWidth" value={firstPlacement.width.toFixed(4)} />
+      <input type="hidden" name="placementHeight" value={firstPlacement.height.toFixed(4)} />
+
+      {normalizedRecipients.map((recipient, recipientIndex) => {
+        const recipientPlacements = placements.filter((placement) => placement.recipientId === recipient.id);
+
+        return recipientPlacements.map((placement, placementIndex) => (
+          <Fragment key={placement.id}>
+            <input
+              type="hidden"
+              name={`recipients[${recipientIndex}].placements[${placementIndex}].pageNumber`}
+              value={placement.pageNumber}
+            />
+            <input
+              type="hidden"
+              name={`recipients[${recipientIndex}].placements[${placementIndex}].x`}
+              value={placement.x.toFixed(4)}
+            />
+            <input
+              type="hidden"
+              name={`recipients[${recipientIndex}].placements[${placementIndex}].y`}
+              value={placement.y.toFixed(4)}
+            />
+            <input
+              type="hidden"
+              name={`recipients[${recipientIndex}].placements[${placementIndex}].width`}
+              value={placement.width.toFixed(4)}
+            />
+            <input
+              type="hidden"
+              name={`recipients[${recipientIndex}].placements[${placementIndex}].height`}
+              value={placement.height.toFixed(4)}
+            />
+          </Fragment>
+        ));
+      })}
     </div>
   );
 }
