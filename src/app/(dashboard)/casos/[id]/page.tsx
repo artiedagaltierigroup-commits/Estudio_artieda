@@ -1,4 +1,5 @@
 import { getCase } from "@/actions/cases";
+import { CaseDeleteButton } from "@/components/cases/case-delete-button";
 import { EmptyState } from "@/components/system/empty-state";
 import { MetricCard } from "@/components/system/metric-card";
 import { MoneyAmount } from "@/components/system/money-amount";
@@ -88,6 +89,7 @@ export default async function CaseDetailPage({ params }: { params: Promise<{ id:
                 Editar caso
               </Link>
             </Button>
+            <CaseDeleteButton caseId={caseData.id} caseTitle={caseData.title} />
             <Button asChild>
               <Link href={`/cobros/nuevo?caseId=${caseData.id}`}>
                 <Plus className="h-4 w-4" />

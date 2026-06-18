@@ -262,3 +262,30 @@ export async function updateCaseStatus(id: string, status: "ACTIVE" | "CLOSED" |
   revalidatePath(`/clientes/${existing.clientId}`);
   return { success: true };
 }
+
+export async function deleteCase(id: string) {
+  const userId = await getUserId();
+  const existing = await db.query.cases.findFirst({
+    where: (item, { and: andOperator, eq: eqOperator }) =>
+      andOperator(eqOperator(item.id, id), eqOperator(item.userId, userId)),
+  });
+  if (!existing) return { error: "Caso no encontrado" };
+
+  await logActivity({
+    userId,
+    entityType: "case",
+    entityId: id,
+    action: "deleted",
+    previousValue: existing as Record<string, unknown>,
+    note: "Caso eliminado definitivamente",
+  });
+
+  await db.delete(cases).where(and(eq(cases.id, id), eq(cases.userId, userId)));
+
+  revalidatePath("/casos");
+  revalidatePath(`/clientes/${existing.clientId}`);
+  revalidatePath("/cobros");
+  revalidatePath("/");
+  revalidatePath("/estadisticas");
+  return { success: true };
+}
