@@ -70,13 +70,13 @@ export default async function FirmaDetallePage({ params }: { params: Promise<{ i
         />
       </SectionCard>
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]">
+      <div className="space-y-6">
         <SectionCard
           eyebrow="Documento"
           title={request.document?.originalFileName ?? "Documento pendiente"}
           description="Vista temporal del PDF original y posicion marcada para la firma."
         >
-          <div className="relative mx-auto aspect-[3/4] w-full max-w-2xl overflow-hidden rounded-[28px] border border-border/80 bg-white">
+          <div className="relative mx-auto h-[min(78vh,980px)] min-h-[520px] w-full max-w-5xl overflow-hidden rounded-[28px] border border-border/80 bg-white">
             {documentUrl ? (
               <object data={documentUrl} type="application/pdf" className="h-full w-full" aria-label="PDF original">
                 <div className="flex h-full items-center justify-center p-6 text-center text-sm text-muted-foreground">
@@ -102,13 +102,13 @@ export default async function FirmaDetallePage({ params }: { params: Promise<{ i
           </div>
         </SectionCard>
 
-        <div className="space-y-6">
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
           <SectionCard
             eyebrow="Destinatario"
             title="Datos de firma"
             description="Informacion usada para el envio y la constancia."
           >
-            <div className="space-y-3">
+            <div className="grid gap-3 md:grid-cols-3">
               <div className="rounded-[24px] border border-border/70 bg-white/85 p-4">
                 <div className="flex items-center gap-2 text-sm font-medium text-foreground">
                   <UserRound className="h-4 w-4 text-primary" />
