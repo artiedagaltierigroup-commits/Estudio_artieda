@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { getSupabasePublicKey } from "@/lib/supabase/env";
+import { isPublicRoutePath } from "@/lib/public-routes";
 
 type CookieToSet = {
   name: string;
@@ -40,7 +41,7 @@ export async function middleware(request: NextRequest) {
 
   const pathname = request.nextUrl.pathname;
 
-  if (pathname.startsWith("/firmar")) {
+  if (isPublicRoutePath(pathname)) {
     return supabaseResponse;
   }
 
