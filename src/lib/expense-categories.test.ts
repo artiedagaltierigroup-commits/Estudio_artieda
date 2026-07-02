@@ -9,6 +9,7 @@ describe("expense categories", () => {
     expect(expenseCategories).toContain("Ropa e imagen profesional");
     expect(expenseCategories).toContain("Equipamiento");
     expect(expenseCategories).toContain("Salud y bienestar");
+    expect(expenseCategories).toContain("Farmacia");
   });
 
   it("keeps an unknown existing category visible when editing", () => {

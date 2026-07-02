@@ -14,6 +14,7 @@ const baseExpenseCategories = [
   "Equipamiento",
   "Capacitacion",
   "Salud y bienestar",
+  "Farmacia",
   "Varios",
 ] as const;
 
