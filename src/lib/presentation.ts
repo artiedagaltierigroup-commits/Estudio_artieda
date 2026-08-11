@@ -1,4 +1,13 @@
-export type VisualTone = "rose" | "sage" | "amber" | "slate" | "lilac" | "danger";
+export type VisualTone =
+  | "rose"
+  | "sage"
+  | "amber"
+  | "slate"
+  | "lilac"
+  | "danger"
+  | "priority-high"
+  | "priority-medium"
+  | "priority-low";
 
 interface ToneStyles {
   panel: string;
@@ -57,6 +66,33 @@ const toneStylesMap: Record<VisualTone, ToneStyles> = {
     chip: "border border-[#efc8c8] bg-[#fcf0f0] text-[#9b4747]",
     dot: "bg-[#d96c6c]",
     accent: "text-[#9b4747]",
+  },
+  "priority-high": {
+    panel: "border-[#efcfcf] bg-white",
+    iconWrap: "bg-[#f7e4e4] text-[#9b4747]",
+    icon: "text-[#9b4747]",
+    chip:
+      "border border-[#efc8c8] bg-[#fcf0f0] text-[#9b4747] dark:border-[#713c3c] dark:bg-[#3a2020] dark:text-[#f5b9b9]",
+    dot: "bg-[#d96c6c] dark:bg-[#f08a8a]",
+    accent: "text-[#9b4747]",
+  },
+  "priority-medium": {
+    panel: "border-[#ecd49a] bg-white",
+    iconWrap: "bg-[#fff1c8] text-[#76500f]",
+    icon: "text-[#76500f]",
+    chip:
+      "border border-[#ecd49a] bg-[#fff6dc] text-[#76500f] dark:border-[#6d5626] dark:bg-[#352a15] dark:text-[#f4cf74]",
+    dot: "bg-[#d89521] dark:bg-[#efb84b]",
+    accent: "text-[#76500f]",
+  },
+  "priority-low": {
+    panel: "border-[#c9dfd0] bg-white",
+    iconWrap: "bg-[#e4f2e8] text-[#3f6b50]",
+    icon: "text-[#3f6b50]",
+    chip:
+      "border border-[#c9dfd0] bg-[#edf7f0] text-[#3f6b50] dark:border-[#365d44] dark:bg-[#1c3124] dark:text-[#a8d6b8]",
+    dot: "bg-[#62a47a] dark:bg-[#80c397]",
+    accent: "text-[#3f6b50]",
   },
 };
 

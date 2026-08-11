@@ -11,10 +11,10 @@ import {
 
 describe("module presenters", () => {
   it("maps reminder priorities to visual tones", () => {
-    expect(getReminderPriorityTone("HIGH")).toBe("danger");
-    expect(getReminderPriorityTone("MEDIUM")).toBe("amber");
-    expect(getReminderPriorityTone("LOW")).toBe("slate");
-    expect(getReminderPriorityTone("UNKNOWN")).toBe("slate");
+    expect(getReminderPriorityTone("HIGH")).toBe("priority-high");
+    expect(getReminderPriorityTone("MEDIUM")).toBe("priority-medium");
+    expect(getReminderPriorityTone("LOW")).toBe("priority-low");
+    expect(getReminderPriorityTone("UNKNOWN")).toBe("priority-low");
   });
 
   it("maps calendar event types to labels and tones", () => {

@@ -3,12 +3,12 @@ import type { VisualTone } from "./presentation";
 export function getReminderPriorityTone(priority: string): VisualTone {
   switch (priority) {
     case "HIGH":
-      return "danger";
+      return "priority-high";
     case "MEDIUM":
-      return "amber";
+      return "priority-medium";
     case "LOW":
     default:
-      return "slate";
+      return "priority-low";
   }
 }
 
