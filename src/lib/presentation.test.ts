@@ -32,5 +32,11 @@ describe("presentation helpers", () => {
   it("exposes chip classes for each tone", () => {
     expect(getToneStyles("rose").chip).toContain("bg-[#f8e8ee]");
     expect(getToneStyles("danger").dot).toContain("#d96c6c");
+    expect(getToneStyles("priority-high").chip).toContain("bg-[#fcf0f0]");
+    expect(getToneStyles("priority-high").dot).toContain("#d96c6c");
+    expect(getToneStyles("priority-medium").chip).toContain("bg-[#fff6dc]");
+    expect(getToneStyles("priority-medium").dot).toContain("#d89521");
+    expect(getToneStyles("priority-low").chip).toContain("bg-[#edf7f0]");
+    expect(getToneStyles("priority-low").dot).toContain("#62a47a");
   });
 });
