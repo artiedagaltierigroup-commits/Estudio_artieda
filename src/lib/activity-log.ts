@@ -4,6 +4,7 @@ import { activityLog } from "@/db/schema";
 
 type ActivityValues = typeof activityLog.$inferInsert;
 export type LogParams = Pick<ActivityValues, "userId" | "entityType" | "entityId" | "action"> & {
+  actorUserId?: string;
   previousValue?: Record<string, unknown>;
   newValue?: Record<string, unknown>;
   note?: string;

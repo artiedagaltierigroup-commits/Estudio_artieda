@@ -14,11 +14,13 @@ import { filterCaseFormClients, type CaseFormClientOption } from "@/lib/case-for
 import { cn } from "@/lib/utils";
 import { Plus, Save, Search, UserPlus } from "lucide-react";
 import Link from "next/link";
+import type { WorkspaceRole } from "@/lib/workspace-permissions";
 
 const selectClassName =
   "flex h-11 w-full rounded-2xl border border-input bg-background px-4 py-2 text-sm text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
 interface CaseFormProps {
+  role: WorkspaceRole;
   action: (formData: FormData) => void | Promise<void>;
   cancelHref: string;
   submitLabel: string;
@@ -54,6 +56,7 @@ const emptyQuickClientDraft: QuickClientDraft = {
 };
 
 export function CaseForm({
+  role,
   action,
   cancelHref,
   submitLabel,
@@ -305,6 +308,7 @@ export function CaseForm({
           description="Configuracion minima para seguir el caso desde el panel sin sobrecargar el alta."
         >
           <div className="grid gap-4 sm:grid-cols-2">
+            {role === "ADMIN" ? <>
             <div className="space-y-2">
               <Label htmlFor="fee">Honorarios</Label>
               <CurrencyInput
@@ -324,6 +328,7 @@ export function CaseForm({
                 placeholder="Transferencia, efectivo, etc."
               />
             </div>
+            </> : null}
 
             <div className="space-y-2">
               <Label htmlFor="status">Estado</Label>
@@ -389,7 +394,7 @@ export function CaseForm({
             2. Si no existe, crealo desde el boton lateral y queda elegido automaticamente.
           </div>
           <div className="rounded-[24px] border border-border/70 bg-white/80 p-4">
-            3. Guarda el caso y despues registra cobros y pagos parciales desde la ficha.
+            {role === "ADMIN" ? "3. Guarda el caso y despues registra cobros y pagos parciales desde la ficha." : "3. Guardá el caso y seguí sus tareas y recordatorios desde la ficha."}
           </div>
         </div>
       </SectionCard>

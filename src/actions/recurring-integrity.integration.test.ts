@@ -1,3 +1,4 @@
+vi.mock("@/lib/workspace-access", () => ({ requireAdminAccess: async () => { if(!state.authenticated) throw new Error("No autenticado"); return {actorUserId:state.owner,ownerUserId:state.owner,role:"ADMIN"}; } }));
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import postgres from "postgres";
 import { drizzle } from "drizzle-orm/postgres-js";

@@ -1,3 +1,4 @@
+vi.mock("@/lib/workspace-access", () => ({ requireAdminAccess: async () => ({actorUserId:state.userId,ownerUserId:state.userId,role:"ADMIN"}) }));
 import { randomUUID } from "node:crypto";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import postgres from "postgres";

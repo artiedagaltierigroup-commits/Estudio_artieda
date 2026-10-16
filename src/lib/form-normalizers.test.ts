@@ -2,6 +2,20 @@ import { describe, expect, it } from "vitest";
 import { normalizeReminderMutationInput } from "./form-normalizers";
 
 describe("normalizeReminderMutationInput", () => {
+  it("interprets form times in the office timezone even when the server uses UTC", () => {
+    const previous = process.env.TZ;
+    process.env.TZ = "UTC";
+    try {
+      const result = normalizeReminderMutationInput({ title: "Audiencia", reminderDate: "2026-10-16T09:30", priority: "MEDIUM" });
+      expect(result.reminderDate.toISOString()).toBe("2026-10-16T12:30:00.000Z");
+    } finally {
+      if (previous === undefined) delete process.env.TZ; else process.env.TZ = previous;
+    }
+  });
+  it("preserves explicit offsets from the reminder editor", () => {
+    const result = normalizeReminderMutationInput({ title: "Audiencia", reminderDate: "2026-10-16T09:30:00-03:00", priority: "MEDIUM" });
+    expect(result.reminderDate.toISOString()).toBe("2026-10-16T12:30:00.000Z");
+  });
   it("converts empty relation fields to null and reminderDate to Date", () => {
     const normalized = normalizeReminderMutationInput({
       caseId: "",

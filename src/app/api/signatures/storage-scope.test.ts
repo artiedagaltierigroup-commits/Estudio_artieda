@@ -20,7 +20,11 @@ const fixture = () => ({
   }],
 });
 const state = vi.hoisted(() => ({ request: undefined as unknown, recipient: undefined as unknown,
-  download: vi.fn(async () => ({ data: new Blob(["synthetic PDF"]), error: null })),
+  role: "ADMIN" as "ADMIN" | "COLLABORATOR",
+  actor: "00000000-0000-4000-8000-000000000001",
+  accessError: undefined as undefined | "UNAUTHENTICATED" | "ACCESS_DENIED",
+  log: vi.fn(async () => {}),
+  download: vi.fn(async (path: string) => { void path; return { data: new Blob(["synthetic PDF"]), error: null }; }),
   signedUrl: vi.fn(async () => ({ data: { signedUrl: "https://example.invalid/signed-object" }, error: null })),
   upload: vi.fn(async () => ({ error: null })),
 }));
@@ -28,7 +32,14 @@ vi.mock("@/db", () => ({ db: { query: {
   signatureRequests: { findFirst: async () => state.request, findMany: async () => [state.request] },
   signatureRecipients: { findFirst: async () => state.recipient },
 }, insert: () => ({ values: async () => {} }) } }));
-vi.mock("@/lib/activity-log", () => ({ logActivity: async () => {} }));
+vi.mock("@/lib/activity-log", () => ({ logActivity: state.log }));
+vi.mock("@/lib/workspace-access", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/workspace-access")>();
+  return { ...actual, getWorkspaceAccess: async () => {
+    if (state.accessError) throw new actual.WorkspaceAccessError(state.accessError);
+    return { actorUserId: state.actor, ownerUserId: "00000000-0000-4000-8000-000000000001", role: state.role };
+  } };
+});
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: async () => ({ auth: { getUser: async () => ({ data: { user: { id: "00000000-0000-4000-8000-000000000001" } } }) } }) }));
 vi.mock("@/lib/supabase/admin", () => ({ createSupabaseAdminClient: () => ({ storage: { from: () => ({
@@ -51,6 +62,7 @@ describe("privileged signature downloads stay inside the authenticated or token 
     request = fixture(); state.request = request;
     state.recipient = { ...request.recipients[0], signedCopyTokenExpiresAt: new Date(Date.now() + 86400000), request };
     state.download.mockClear(); state.signedUrl.mockClear(); state.upload.mockClear();
+    state.role = "ADMIN"; state.actor = owner; state.accessError = undefined; state.log.mockClear();
   });
 
   it.each([otherOwner, owner])("rejects a forged signed PDF path (owner=%s) before Storage", async (pathOwner) => {
@@ -101,5 +113,16 @@ describe("privileged signature downloads stay inside the authenticated or token 
     expect(await signedDocument(new Request("https://example.invalid"), context())).toHaveProperty("status", 200);
     request.document.originalStoragePath = storagePath("signed");
     expect(await getSignatureOriginalDocumentUrl(requestId)).toBe("https://example.invalid/signed-object");
+  });
+  it.each([signedDocument, signatureImage, partialDocument, certificate])("allows a collaborator to download office artifacts and records their identity %#", async (route) => {
+    state.role = "COLLABORATOR"; state.actor = "00000000-0000-4000-8000-000000000003";
+    expect(await route(new Request("https://example.invalid"), context())).toHaveProperty("status", 200);
+    expect(state.log).toHaveBeenCalledWith(expect.objectContaining({ userId: owner, actorUserId: state.actor }));
+    expect(state.download.mock.calls.every(([path]) => String(path).startsWith(`${owner}/signature-requests/${requestId}/`))).toBe(true);
+  });
+  it.each([["UNAUTHENTICATED", 401], ["ACCESS_DENIED", 403]] as const)("rejects %s before storage access", async (error, status) => {
+    state.accessError = error;
+    expect(await signedDocument(new Request("https://example.invalid"), context())).toHaveProperty("status", status);
+    expect(state.download).not.toHaveBeenCalled();
   });
 });

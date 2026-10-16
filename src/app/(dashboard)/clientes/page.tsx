@@ -1,4 +1,6 @@
 import { getClients } from "@/actions/clients";
+import { getWorkspaceAccess } from "@/lib/workspace-access";
+import { OperationalClientsPage } from "@/components/operational/workspace-pages";
 import { EmptyState } from "@/components/system/empty-state";
 import { MetricCard } from "@/components/system/metric-card";
 import { MoneyAmount } from "@/components/system/money-amount";
@@ -25,6 +27,8 @@ interface ClientesPageProps {
 export default async function ClientesPage({ searchParams }: ClientesPageProps) {
   const params = (await searchParams) ?? {};
   const query = params.q?.trim() ?? "";
+  const access = await getWorkspaceAccess();
+  if (access.role === "COLLABORATOR") return <OperationalClientsPage query={query} />;
   const clientList = await getClients(query);
 
   const overdueClients = clientList.filter((client) => client.portfolioStatus === "OVERDUE").length;

@@ -1,4 +1,6 @@
 import { getCases } from "@/actions/cases";
+import { getWorkspaceAccess } from "@/lib/workspace-access";
+import { OperationalCasesPage } from "@/components/operational/workspace-pages";
 import { getClients } from "@/actions/clients";
 import { EmptyState } from "@/components/system/empty-state";
 import { MetricCard } from "@/components/system/metric-card";
@@ -43,6 +45,8 @@ interface CasosPageProps {
 
 export default async function CasosPage({ searchParams }: CasosPageProps) {
   const params = (await searchParams) ?? {};
+  const access = await getWorkspaceAccess();
+  if (access.role === "COLLABORATOR") return <OperationalCasesPage query={params.q?.trim() ?? ""} status={params.status?.trim() ?? ""} />;
   const filters = {
     query: params.q?.trim() ?? "",
     status: params.status?.trim() ?? "",

@@ -3,7 +3,8 @@ import { db } from "@/db";
 import { signatureEvents } from "@/db/schema";
 import { SIGNATURE_BUCKET } from "@/lib/signature-files";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { createClient } from "@/lib/supabase/server";
+import { getWorkspaceAccess, WorkspaceAccessError } from "@/lib/workspace-access";
+import { signatureCaseColumns } from "@/lib/signature-case-projection";
 import { isOwnedSignatureRequestGraph, isSignatureStoragePath, type SignatureStorageScope } from "@/lib/signature-storage-scope";
 
 type DownloadArtifact = "signed-document" | "signature-image" | "certificate" | "partial-document";
@@ -23,18 +24,20 @@ export function downloadResponse(bytes: ArrayBuffer, params: { contentType: stri
 }
 
 export async function getAuthenticatedSignatureRequest(id: string) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) return { error: jsonError("No autenticado", 401) };
+  let access;
+  try {
+    access = await getWorkspaceAccess();
+  } catch (error) {
+    if (error instanceof WorkspaceAccessError) return { error: jsonError(error.message, error.status) };
+    throw error;
+  }
+  const { ownerUserId: userId, actorUserId } = access;
 
   const request = await db.query.signatureRequests.findFirst({
-    where: (item, { and, eq }) => and(eq(item.id, id), eq(item.userId, user.id)),
+    where: (item, { and, eq }) => and(eq(item.id, id), eq(item.userId, userId)),
     with: {
       client: true,
-      case: true,
+      case: { columns: signatureCaseColumns },
       document: true,
       recipients: {
         orderBy: (recipient, { asc }) => [asc(recipient.sortOrder)],
@@ -50,8 +53,8 @@ export async function getAuthenticatedSignatureRequest(id: string) {
     },
   });
 
-  if (!request || !isOwnedSignatureRequestGraph(request, user.id)) return { error: jsonError("Solicitud no encontrada", 404) };
-  return { request, userId: user.id };
+  if (!request || !isOwnedSignatureRequestGraph(request, userId)) return { error: jsonError("Solicitud no encontrada", 404) };
+  return { request, userId, actorUserId };
 }
 
 export async function downloadStorageObject(path: string, contentType: string, fileName: string, scope: SignatureStorageScope) {
@@ -65,6 +68,7 @@ export async function downloadStorageObject(path: string, contentType: string, f
 
 export async function logSignatureArtifactDownload(params: {
   userId: string;
+  actorUserId: string;
   requestId: string;
   documentId: string;
   artifact: DownloadArtifact;
@@ -73,11 +77,12 @@ export async function logSignatureArtifactDownload(params: {
     userId: params.userId,
     signatureRequestId: params.requestId,
     type: "downloaded",
-    metadata: { artifact: params.artifact },
+    metadata: { artifact: params.artifact, actorUserId: params.actorUserId },
   });
 
   await logActivity({
     userId: params.userId,
+    actorUserId: params.actorUserId,
     entityType: "document",
     entityId: params.documentId,
     action: "downloaded",

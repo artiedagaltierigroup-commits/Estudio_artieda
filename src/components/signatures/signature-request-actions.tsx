@@ -16,6 +16,7 @@ interface SignatureRequestActionsProps {
   signatureImageAvailable?: boolean;
   certificateAvailable?: boolean;
   signedRecipientCount?: number;
+  canDelete: boolean;
 }
 
 function canSend(status: string) {
@@ -45,6 +46,7 @@ export function SignatureRequestActions({
   signatureImageAvailable = false,
   certificateAvailable = false,
   signedRecipientCount = 0,
+  canDelete,
 }: SignatureRequestActionsProps) {
   async function sendAction() {
     "use server";
@@ -154,12 +156,14 @@ export function SignatureRequestActions({
         </form>
       ) : null}
 
-      <form action={deleteAction}>
-        <Button type="submit" variant="ghost">
-          <Trash2 className="h-4 w-4" />
-          Eliminar solicitud
-        </Button>
-      </form>
+      {canDelete ? (
+        <form action={deleteAction}>
+          <Button type="submit" variant="ghost">
+            <Trash2 className="h-4 w-4" />
+            Eliminar solicitud
+          </Button>
+        </form>
+      ) : null}
     </div>
   );
 }

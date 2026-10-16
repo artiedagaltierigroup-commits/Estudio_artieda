@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { getSignaturePlacementColor } from "@/lib/signature-placement-colors";
 import { getSignatureStatusLabel, getSignatureStatusTone } from "@/lib/signature-status";
 import { formatDateTime } from "@/lib/utils";
+import { getWorkspaceAccess } from "@/lib/workspace-access";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -31,6 +32,7 @@ function placementStyle(placement: SignaturePlacementDetail) {
 }
 
 export default async function FirmaDetallePage({ params }: { params: Promise<{ id: string }> }) {
+  const access = await getWorkspaceAccess();
   const { id } = await params;
   const request = await getSignatureRequest(id);
   if (!request) notFound();
@@ -82,6 +84,7 @@ export default async function FirmaDetallePage({ params }: { params: Promise<{ i
           signatureImageAvailable={Boolean(request.document?.signatureStoragePath)}
           certificateAvailable={Boolean(request.document?.signedSha256)}
           signedRecipientCount={signedRecipientCount}
+          canDelete={access.role === "ADMIN"}
         />
         {request.status === "SIGNED" && request.sendSignedCopyToRecipients && !request.signedCopySentAt ? (
           <p role="status" className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">

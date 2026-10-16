@@ -58,6 +58,7 @@ export function getActivityActionLabel(action: string): string {
 
 export function getActivityEntityLabel(entityType: string): string {
   const labels: Record<string, string> = {
+    client: "Cliente",
     case: "Caso",
     charge: "Cobro",
     payment: "Pago",

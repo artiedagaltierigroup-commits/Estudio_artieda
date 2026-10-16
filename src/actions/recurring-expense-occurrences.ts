@@ -8,14 +8,11 @@ import { buildRecurringPayableChecklist, getRecurringPayableChecklistRange, isRe
 import { getRecurringOccurrenceStatus, type RecurringExpenseOccurrenceStatus } from "@/lib/recurring-expense-occurrences";
 import { createRecurringExpenseRealization, lockRecurringOccurrence, syncUserRecurringExpenseOccurrences } from "@/lib/recurring-expense-sync";
 import { getBusinessDate } from "@/lib/business-date";
-import { createClient } from "@/lib/supabase/server";
+import { requireAdminAccess } from "@/lib/workspace-access";
 import { logActivity } from "@/lib/activity-log";
 
 async function getUserId(): Promise<string> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error("No autenticado");
-  return user.id;
+  return (await requireAdminAccess()).ownerUserId;
 }
 
 function revalidateRecurringSurface() {

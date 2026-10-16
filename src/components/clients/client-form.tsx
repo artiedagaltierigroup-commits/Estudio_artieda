@@ -6,8 +6,10 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Save } from "lucide-react";
 import Link from "next/link";
+import type { WorkspaceRole } from "@/lib/workspace-permissions";
 
 interface ClientFormProps {
+  role: WorkspaceRole;
   action: (formData: FormData) => void | Promise<void>;
   cancelHref: string;
   submitLabel: string;
@@ -22,14 +24,14 @@ interface ClientFormProps {
   };
 }
 
-export function ClientForm({ action, cancelHref, submitLabel, initialValues }: ClientFormProps) {
+export function ClientForm({ role, action, cancelHref, submitLabel, initialValues }: ClientFormProps) {
   return (
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_320px]">
       <form action={action} className="space-y-6">
         <SectionCard
           eyebrow="Ficha primaria"
           title="Datos de contacto"
-          description="Carga base del cliente para que el sistema ya pueda relacionarlo con casos, cobros y recordatorios."
+          description={role === "ADMIN" ? "Carga base del cliente para que el sistema ya pueda relacionarlo con casos, cobros y recordatorios." : "Datos del cliente para relacionarlo con sus casos y recordatorios."}
         >
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2 sm:col-span-2">
@@ -134,7 +136,7 @@ export function ClientForm({ action, cancelHref, submitLabel, initialValues }: C
             Nombre y una via de contacto ya alcanzan para operar sin friccion.
           </div>
           <div className="rounded-[24px] border border-border/70 bg-white/80 p-4">
-            Esta ficha va a alimentar casos, cobros, recordatorios y metricas del dashboard.
+            {role === "ADMIN" ? "Esta ficha va a alimentar casos, cobros, recordatorios y metricas del dashboard." : "Esta ficha se comparte con el equipo para seguir casos y recordatorios."}
           </div>
           <div className="rounded-[24px] border border-border/70 bg-white/80 p-4">
             Si cambia algun dato, conviene corregirlo aca para no duplicar inconsistencias en otros modulos.

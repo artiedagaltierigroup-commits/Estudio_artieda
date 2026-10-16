@@ -1,3 +1,4 @@
+vi.mock("@/lib/workspace-access", () => ({ requireAdminAccess: async () => ({actorUserId:"owner",ownerUserId:"owner",role:"ADMIN"}) }));
 import { describe, expect, it, vi } from "vitest";
 
 const { findMany } = vi.hoisted(() => ({ findMany: vi.fn().mockResolvedValue([]) }));

@@ -7,7 +7,8 @@ import { db } from "@/db";
 import { cases } from "@/db/schema";
 import { filterCasesByFilters, getCasePendingBalance, summarizeCaseFinance } from "@/lib/case-insights";
 import { summarizeSignatureRequests } from "@/lib/signature-summaries";
-import { createClient } from "@/lib/supabase/server";
+import { isOwnedSignatureRequestGraph } from "@/lib/signature-storage-scope";
+import { getWorkspaceAccess, requireAdminAccess } from "@/lib/workspace-access";
 import { deriveChargeStatus } from "@/lib/utils";
 import { logActivity } from "@/lib/activity-log";
 
@@ -29,32 +30,24 @@ function normalizeOptionalText(value?: string) {
   return trimmed ? trimmed : null;
 }
 
-function toCaseValues(data: z.infer<typeof CaseSchema>, clientId: string) {
+function toCaseValues(data: z.infer<typeof CaseSchema>, clientId: string, includeFinancialFields: boolean) {
   return {
     clientId,
     title: data.title.trim(),
     description: normalizeOptionalText(data.description),
     status: data.status,
     priority: data.priority,
-    fee: normalizeOptionalText(data.fee),
-    preferredPaymentMethod: normalizeOptionalText(data.preferredPaymentMethod),
+    ...(includeFinancialFields ? {
+      fee: normalizeOptionalText(data.fee),
+      preferredPaymentMethod: normalizeOptionalText(data.preferredPaymentMethod),
+    } : {}),
     startDate: normalizeOptionalText(data.startDate),
     endDate: normalizeOptionalText(data.endDate),
   };
 }
 
-async function getUserId(): Promise<string> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) throw new Error("No autenticado");
-  return user.id;
-}
-
 export async function getCases(filters?: { query?: string; status?: string; chargeStatus?: string }) {
-  const userId = await getUserId();
+  const { ownerUserId: userId } = await requireAdminAccess();
   const rows = await db.query.cases.findMany({
     where: (item, { eq: eqOperator }) => eqOperator(item.userId, userId),
     with: {
@@ -89,7 +82,7 @@ export async function getCases(filters?: { query?: string; status?: string; char
 }
 
 export async function getCase(id: string) {
-  const userId = await getUserId();
+  const { ownerUserId: userId } = await requireAdminAccess();
   const currentCase = await db.query.cases.findFirst({
     where: (item, { and: andOperator, eq: eqOperator }) =>
       andOperator(eqOperator(item.id, id), eqOperator(item.userId, userId)),
@@ -123,6 +116,7 @@ export async function getCase(id: string) {
       document: true,
       recipients: {
         orderBy: (recipient, { asc }) => [asc(recipient.sortOrder)],
+        with: { client: { columns: { id: true, userId: true } } },
       },
       events: {
         orderBy: (event, { desc }) => [desc(event.createdAt)],
@@ -130,6 +124,7 @@ export async function getCase(id: string) {
       },
     },
   });
+  const ownedSignatureRows = signatureRows.filter(request => isOwnedSignatureRequestGraph(request, userId));
 
   const financeSummary = summarizeCaseFinance(currentCase.charges);
   const paymentTimeline = currentCase.charges
@@ -169,8 +164,8 @@ export async function getCase(id: string) {
     financeSummary,
     paymentTimeline,
     chargesWithDerivedStatus,
-    signatureSummary: summarizeSignatureRequests(signatureRows),
-    recentSignatureRequests: signatureRows.slice(0, 5).map((request) => ({
+    signatureSummary: summarizeSignatureRequests(ownedSignatureRows),
+    recentSignatureRequests: ownedSignatureRows.slice(0, 5).map((request) => ({
       ...request,
       latestEvent: request.events[0] ?? null,
     })),
@@ -178,7 +173,7 @@ export async function getCase(id: string) {
 }
 
 export async function getCaseRecord(id: string) {
-  const userId = await getUserId();
+  const { ownerUserId: userId } = await requireAdminAccess();
   return db.query.cases.findFirst({
     where: (item, { and: andOperator, eq: eqOperator }) =>
       andOperator(eqOperator(item.id, id), eqOperator(item.userId, userId)),
@@ -186,7 +181,10 @@ export async function getCaseRecord(id: string) {
 }
 
 export async function createCase(formData: FormData) {
-  const userId = await getUserId();
+  const { ownerUserId: userId, actorUserId, role } = await getWorkspaceAccess();
+  if (role !== "ADMIN" && (formData.has("fee") || formData.has("preferredPaymentMethod"))) {
+    return { error: "No tenés permiso para modificar campos financieros" };
+  }
   const raw = Object.fromEntries(formData.entries());
   const parsed = CaseSchema.safeParse(raw);
   if (!parsed.success) return { error: parsed.error.errors[0].message };
@@ -198,11 +196,12 @@ export async function createCase(formData: FormData) {
 
   const [inserted] = await db
     .insert(cases)
-    .values({ ...toCaseValues(parsed.data, parsed.data.clientId), userId })
+    .values({ ...toCaseValues(parsed.data, parsed.data.clientId, role === "ADMIN"), userId })
     .returning();
 
   await logActivity({
     userId,
+    actorUserId,
     entityType: "case",
     entityId: inserted.id,
     action: "created",
@@ -215,7 +214,10 @@ export async function createCase(formData: FormData) {
 }
 
 export async function updateCase(id: string, formData: FormData) {
-  const userId = await getUserId();
+  const { ownerUserId: userId, actorUserId, role } = await getWorkspaceAccess();
+  if (role !== "ADMIN" && (formData.has("fee") || formData.has("preferredPaymentMethod"))) {
+    return { error: "No tenés permiso para modificar campos financieros" };
+  }
   const raw = Object.fromEntries(formData.entries());
   const parsed = CaseSchema.safeParse(raw);
   if (!parsed.success) return { error: parsed.error.errors[0].message };
@@ -233,11 +235,12 @@ export async function updateCase(id: string, formData: FormData) {
 
   await db
     .update(cases)
-    .set({ ...toCaseValues(parsed.data, parsed.data.clientId), updatedAt: new Date() })
+    .set({ ...toCaseValues(parsed.data, parsed.data.clientId, role === "ADMIN"), updatedAt: new Date() })
     .where(and(eq(cases.id, id), eq(cases.userId, userId)));
 
   await logActivity({
     userId,
+    actorUserId,
     entityType: "case",
     entityId: id,
     action: "updated",
@@ -253,7 +256,8 @@ export async function updateCase(id: string, formData: FormData) {
 }
 
 export async function updateCaseStatus(id: string, status: "ACTIVE" | "CLOSED" | "SUSPENDED") {
-  const userId = await getUserId();
+  const { ownerUserId: userId, actorUserId } = await getWorkspaceAccess();
+  if (!CaseSchema.shape.status.removeDefault().safeParse(status).success) return { error: "Estado de caso inválido" };
   const existing = await db.query.cases.findFirst({
     where: (item, { and: andOperator, eq: eqOperator }) =>
       andOperator(eqOperator(item.id, id), eqOperator(item.userId, userId)),
@@ -267,6 +271,7 @@ export async function updateCaseStatus(id: string, status: "ACTIVE" | "CLOSED" |
 
   await logActivity({
     userId,
+    actorUserId,
     entityType: "case",
     entityId: id,
     action: "status_changed",

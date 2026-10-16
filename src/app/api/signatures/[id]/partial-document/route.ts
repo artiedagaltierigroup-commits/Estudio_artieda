@@ -22,7 +22,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   const result = await getAuthenticatedSignatureRequest(id);
   if ("error" in result) return result.error;
 
-  const { request, userId } = result;
+  const { request, userId, actorUserId } = result;
   if (!request.document) return jsonError("La solicitud no tiene documento disponible", 409);
 
   const signedRecipients = request.recipients.filter(
@@ -70,6 +70,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 
   await logSignatureArtifactDownload({
     userId,
+    actorUserId,
     requestId: request.id,
     documentId: request.document.id,
     artifact: "partial-document",

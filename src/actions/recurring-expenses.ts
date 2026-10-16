@@ -8,7 +8,7 @@ import { recurringExpenseOccurrences, recurringExpenses } from "@/db/schema";
 import { resolveExistingRecurringStartDate } from "@/lib/recurring-expense-normalizers";
 import { calculateMonthlyProjection } from "@/lib/recurring-expense-projection";
 import { listRecurringDueDates } from "@/lib/recurring-expense-occurrences";
-import { createClient } from "@/lib/supabase/server";
+import { requireAdminAccess } from "@/lib/workspace-access";
 import { ChargeMoneySchema, OptionalChargeDateSchema } from "@/lib/charge-money";
 import { syncRecurringExpenseOccurrences } from "./recurring-expense-occurrences";
 
@@ -84,13 +84,7 @@ function toRecurringValues(data: z.infer<typeof RecurringExpenseSchema>, startDa
 }
 
 async function getUserId(): Promise<string> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) throw new Error("No autenticado");
-  return user.id;
+  return (await requireAdminAccess()).ownerUserId;
 }
 
 export async function getRecurringExpenses() {

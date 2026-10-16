@@ -19,7 +19,8 @@ import { buildRecipientSignatureEmail, sendSignatureRequestEmail } from "../lib/
 import { buildSignatureStoragePath, hashBufferSha256, SIGNATURE_BUCKET } from "../lib/signature-files";
 import type { SignatureRequestStatus } from "../lib/signature-status";
 import { createSupabaseAdminClient } from "../lib/supabase/admin";
-import { createClient } from "../lib/supabase/server";
+import { getWorkspaceAccess, requireAdminAccess } from "../lib/workspace-access";
+import { signatureCaseColumns } from "../lib/signature-case-projection";
 import { logActivity } from "../lib/activity-log";
 import { canEditSignatureDocument, withSignatureRequestLock, type SignatureTransaction } from "../lib/signature-transaction";
 import { MAX_SIGNATURE_PDF_BYTES, MAX_SIGNATURE_PDF_MB } from "../lib/signature-limits";
@@ -76,18 +77,9 @@ function buildTokenExpiration(now = new Date()) {
   return expiresAt;
 }
 
-async function getUserId(): Promise<string> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) throw new Error("No autenticado");
-  return user.id;
-}
-
 async function logSignatureEvent(params: {
   userId: string;
+  actorUserId: string;
   signatureRequestId: string;
   signatureRecipientId?: string | null;
   signaturePlacementId?: string | null;
@@ -100,7 +92,7 @@ async function logSignatureEvent(params: {
     signatureRecipientId: params.signatureRecipientId ?? null,
     signaturePlacementId: params.signaturePlacementId ?? null,
     type: params.type,
-    metadata: params.metadata ?? null,
+    metadata: { ...params.metadata, actorUserId: params.actorUserId },
   });
 }
 
@@ -117,7 +109,7 @@ async function getOwnedSignatureRequest(id: string, userId: string, executor: ty
       andOperator(eqOperator(item.id, id), eqOperator(item.userId, userId)),
     with: {
       client: true,
-      case: true,
+      case: { columns: signatureCaseColumns },
       document: true,
       recipients: {
         orderBy: (recipient, { asc }) => [asc(recipient.sortOrder)],
@@ -147,7 +139,7 @@ export async function getSignatureRequests(filters?: {
   status?: string;
   sort?: SignatureSort;
 }) {
-  const userId = await getUserId();
+  const { ownerUserId: userId } = await getWorkspaceAccess();
   const query = filters?.query?.trim();
   const status = filters?.status?.trim();
 
@@ -168,7 +160,7 @@ export async function getSignatureRequests(filters?: {
     },
     with: {
       client: true,
-      case: true,
+      case: { columns: signatureCaseColumns },
       document: true,
       recipients: {
         orderBy: (recipient, { asc }) => [asc(recipient.sortOrder)],
@@ -200,12 +192,12 @@ export async function getSignatureRequests(filters?: {
 }
 
 export async function getSignatureRequest(id: string) {
-  const userId = await getUserId();
+  const { ownerUserId: userId } = await getWorkspaceAccess();
   return getOwnedSignatureRequest(id, userId);
 }
 
 export async function getSignatureFormOptions() {
-  const userId = await getUserId();
+  const { ownerUserId: userId } = await getWorkspaceAccess();
   const [clientRows, caseRows] = await Promise.all([
     db.query.clients.findMany({
       where: (client, { eq: eqOperator }) => eqOperator(client.userId, userId),
@@ -215,6 +207,7 @@ export async function getSignatureFormOptions() {
       },
     }),
     db.query.cases.findMany({
+      columns: signatureCaseColumns,
       where: (item, { eq: eqOperator }) => eqOperator(item.userId, userId),
       orderBy: (item, { desc }) => [desc(item.updatedAt)],
       with: {
@@ -231,10 +224,10 @@ export async function getSignatureFormOptions() {
       taxId: client.taxId,
       hasSavedSignature: shouldOfferSavedSignature({
         clientId: client.id,
-        savedSignatureId: client.savedSignature?.id ?? null,
+        savedSignatureId: client.savedSignature?.userId === userId && client.savedSignature.clientId === client.id ? client.savedSignature.id : null,
       }),
     })),
-    cases: caseRows.map((currentCase) => ({
+    cases: caseRows.filter((currentCase) => currentCase.client?.userId === userId).map((currentCase) => ({
       id: currentCase.id,
       title: currentCase.title,
       clientId: currentCase.clientId,
@@ -244,7 +237,7 @@ export async function getSignatureFormOptions() {
 }
 
 export async function createSignatureDraft(formData: FormData) {
-  const userId = await getUserId();
+  const { ownerUserId: userId, actorUserId } = await getWorkspaceAccess();
   const raw = Object.fromEntries(formData.entries());
   const parsed = SignatureDraftSchema.safeParse(raw);
   if (!parsed.success) return { error: parsed.error.errors[0].message };
@@ -274,10 +267,12 @@ export async function createSignatureDraft(formData: FormData) {
 
   if (caseId) {
     const currentCase = await db.query.cases.findFirst({
+      columns: signatureCaseColumns,
+      with: { client: { columns: { id: true, userId: true } } },
       where: (item, { and: andOperator, eq: eqOperator }) =>
         andOperator(eqOperator(item.id, caseId), eqOperator(item.userId, userId)),
     });
-    if (!currentCase) return { error: "Caso no encontrado" };
+    if (!currentCase || currentCase.client?.userId !== userId) return { error: "Caso no encontrado" };
   }
 
   const [inserted] = await db
@@ -336,6 +331,7 @@ export async function createSignatureDraft(formData: FormData) {
 
   await logSignatureEvent({
     userId,
+    actorUserId,
     signatureRequestId: inserted.id,
     type: "created",
     metadata: {
@@ -346,6 +342,7 @@ export async function createSignatureDraft(formData: FormData) {
 
   await logActivity({
     userId,
+    actorUserId,
     entityType: "signature_request",
     entityId: inserted.id,
     action: "created",
@@ -363,7 +360,7 @@ export async function createSignatureDraft(formData: FormData) {
 }
 
 export async function uploadSignatureDocument(requestId: string, formData: FormData) {
-  const userId = await getUserId();
+  const { ownerUserId: userId, actorUserId } = await getWorkspaceAccess();
   return withSignatureRequestLock(requestId, async (tx) => {
     const request = await getOwnedSignatureRequest(requestId, userId, tx);
     if (!request) return { error: "Solicitud no encontrada" };
@@ -433,6 +430,7 @@ export async function uploadSignatureDocument(requestId: string, formData: FormD
 
     await logSignatureEvent({
       userId,
+      actorUserId,
       signatureRequestId: requestId,
       type: "document_uploaded",
       metadata: { fileName: file.name, originalSha256 },
@@ -447,7 +445,7 @@ export async function updateSignaturePlacement(
   requestId: string,
   placement: { pageNumber: number; x: number; y: number; width: number; height: number }
 ) {
-  const userId = await getUserId();
+  const { ownerUserId: userId, actorUserId } = await getWorkspaceAccess();
   return withSignatureRequestLock(requestId, async (tx) => {
     const request = await getOwnedSignatureRequest(requestId, userId, tx);
     if (!request) return { error: "Solicitud no encontrada" };
@@ -476,6 +474,7 @@ export async function updateSignaturePlacement(
 
     await logSignatureEvent({
       userId,
+      actorUserId,
       signatureRequestId: requestId,
       type: "placement_selected",
       metadata: parsed.data,
@@ -487,7 +486,7 @@ export async function updateSignaturePlacement(
 }
 
 async function sendOrResendSignatureRequest(requestId: string, eventType: "sent" | "resent") {
-  const userId = await getUserId();
+  const { ownerUserId: userId, actorUserId } = await getWorkspaceAccess();
   const prepared = await withSignatureRequestLock(requestId, async (tx) => {
     const request = await getOwnedSignatureRequest(requestId, userId, tx);
     if (!request) return { error: "Solicitud no encontrada" };
@@ -549,6 +548,7 @@ async function sendOrResendSignatureRequest(requestId: string, eventType: "sent"
 
       await logSignatureEvent({
         userId,
+        actorUserId,
         signatureRequestId: requestId,
         signatureRecipientId: payload.recipient.id,
         type: eventType,
@@ -558,6 +558,7 @@ async function sendOrResendSignatureRequest(requestId: string, eventType: "sent"
 
     await logSignatureEvent({
       userId,
+      actorUserId,
       signatureRequestId: requestId,
       type: eventType,
       metadata: {
@@ -568,6 +569,7 @@ async function sendOrResendSignatureRequest(requestId: string, eventType: "sent"
 
     await logActivity({
       userId,
+      actorUserId,
       entityType: "signature_request",
       entityId: requestId,
       action: eventType,
@@ -603,7 +605,7 @@ export async function resendSignatureRequest(requestId: string) {
 }
 
 export async function resendSignatureRecipient(requestId: string, recipientId: string) {
-  const userId = await getUserId();
+  const { ownerUserId: userId, actorUserId } = await getWorkspaceAccess();
   const prepared = await withSignatureRequestLock(requestId, async (tx) => {
     const request = await getOwnedSignatureRequest(requestId, userId, tx);
     if (!request) return { error: "Solicitud no encontrada" };
@@ -652,6 +654,7 @@ export async function resendSignatureRecipient(requestId: string, recipientId: s
 
     await logSignatureEvent({
       userId,
+      actorUserId,
       signatureRequestId: requestId,
       signatureRecipientId: recipient.id,
       type: "resent",
@@ -660,6 +663,7 @@ export async function resendSignatureRecipient(requestId: string, recipientId: s
 
     await logActivity({
       userId,
+      actorUserId,
       entityType: "signature_request",
       entityId: requestId,
       action: "resent",
@@ -677,7 +681,7 @@ export async function resendSignatureRecipient(requestId: string, recipientId: s
 }
 
 export async function cancelSignatureRequest(requestId: string) {
-  const userId = await getUserId();
+  const { ownerUserId: userId, actorUserId } = await getWorkspaceAccess();
   return withSignatureRequestLock(requestId, async (tx) => {
     const request = await getOwnedSignatureRequest(requestId, userId, tx);
     if (!request) return { error: "Solicitud no encontrada" };
@@ -702,12 +706,14 @@ export async function cancelSignatureRequest(requestId: string) {
 
     await logSignatureEvent({
       userId,
+      actorUserId,
       signatureRequestId: requestId,
       type: "cancelled",
     }, tx);
 
     await logActivity({
       userId,
+      actorUserId,
       entityType: "signature_request",
       entityId: requestId,
       action: "cancelled",
@@ -721,13 +727,14 @@ export async function cancelSignatureRequest(requestId: string) {
 }
 
 export async function deleteSignatureRequest(requestId: string) {
-  const userId = await getUserId();
+  const { ownerUserId: userId, actorUserId } = await requireAdminAccess();
   return withSignatureRequestLock(requestId, async (tx) => {
     const request = await getOwnedSignatureRequest(requestId, userId, tx);
     if (!request) return { error: "Solicitud no encontrada" };
 
     await logActivity({
       userId,
+      actorUserId,
       entityType: "signature_request",
       entityId: requestId,
       action: "deleted",
@@ -746,7 +753,7 @@ export async function deleteSignatureRequest(requestId: string) {
 }
 
 export async function downloadSignedDocument(requestId: string) {
-  const userId = await getUserId();
+  const { ownerUserId: userId, actorUserId } = await getWorkspaceAccess();
   const request = await getOwnedSignatureRequest(requestId, userId);
   if (!request) return { error: "Solicitud no encontrada" };
   if (!request.document?.signedStoragePath) return { error: "El PDF firmado todavia no esta disponible" };
@@ -756,6 +763,7 @@ export async function downloadSignedDocument(requestId: string) {
 
   await logSignatureEvent({
     userId,
+    actorUserId,
     signatureRequestId: requestId,
     type: "downloaded",
     metadata: { artifact: "signed-document" },
@@ -763,6 +771,7 @@ export async function downloadSignedDocument(requestId: string) {
 
   await logActivity({
     userId,
+    actorUserId,
     entityType: "document",
     entityId: request.document.id,
     action: "downloaded",
@@ -774,7 +783,7 @@ export async function downloadSignedDocument(requestId: string) {
 }
 
 export async function getSignatureOriginalDocumentUrl(requestId: string) {
-  const userId = await getUserId();
+  const { ownerUserId: userId } = await getWorkspaceAccess();
   const request = await getOwnedSignatureRequest(requestId, userId);
   if (!request?.document) return null;
   if (!isSignatureStoragePath(request.document.originalStoragePath, { userId, requestId: request.id })) return null;

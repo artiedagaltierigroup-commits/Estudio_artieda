@@ -9,7 +9,7 @@ import { filterChargesByFilters, sortChargesByDueDate, summarizeChargeRecord } f
 import { buildInitialChargePayment } from "@/lib/charge-mutations";
 import { ChargeMoneySchema, moneyToCents, OptionalChargeDateSchema } from "@/lib/charge-money";
 import { chargePaidCents, hasOwnedChargeCase, lockOwnedCharge } from "@/lib/charge-transactions";
-import { createClient } from "@/lib/supabase/server";
+import { requireAdminAccess } from "@/lib/workspace-access";
 import { logActivity } from "@/lib/activity-log";
 
 const ChargeSchema = z.object({
@@ -36,10 +36,7 @@ function toChargeValues(data: z.infer<typeof ChargeSchema>) {
 }
 
 async function getUserId(): Promise<string> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error("No autenticado");
-  return user.id;
+  return (await requireAdminAccess()).ownerUserId;
 }
 
 // Filter the parents in SQL too: old inconsistent links must not reveal another owner's data.

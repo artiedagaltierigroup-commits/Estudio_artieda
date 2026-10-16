@@ -99,6 +99,13 @@
       "when": 1792114411355,
       "tag": "0013_cancel_recurring_occurrences",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1792121868760,
+      "tag": "0014_workspace_roles",
+      "breakpoints": true
     }
   ]
 }

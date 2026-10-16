@@ -7,7 +7,7 @@ import { db } from "@/db";
 import { activityLog, payments } from "@/db/schema";
 import { ChargeDateSchema, ChargeMoneySchema, moneyToCents } from "@/lib/charge-money";
 import { chargePaidCents, lockOwnedCharge } from "@/lib/charge-transactions";
-import { createClient } from "@/lib/supabase/server";
+import { requireAdminAccess } from "@/lib/workspace-access";
 import { logActivity } from "@/lib/activity-log";
 
 const PaymentSchema = z.object({
@@ -24,10 +24,7 @@ function normalizeOptionalText(value?: string) {
 }
 
 async function getUserId(): Promise<string> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error("No autenticado");
-  return user.id;
+  return (await requireAdminAccess()).ownerUserId;
 }
 
 export async function createPayment(formData: FormData) {

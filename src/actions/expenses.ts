@@ -6,7 +6,7 @@ import { z } from "zod";
 import { db } from "@/db";
 import { expenses, recurringExpenses, recurringExpenseOccurrences } from "@/db/schema";
 import { filterExpensesByFilters } from "@/lib/expense-insights";
-import { createClient } from "@/lib/supabase/server";
+import { requireAdminAccess } from "@/lib/workspace-access";
 import { logActivity } from "@/lib/activity-log";
 import { ChargeDateSchema, ChargeMoneySchema } from "@/lib/charge-money";
 
@@ -38,13 +38,7 @@ function toExpenseValues(data: z.infer<typeof ExpenseSchema>) {
 }
 
 async function getUserId(): Promise<string> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) throw new Error("No autenticado");
-  return user.id;
+  return (await requireAdminAccess()).ownerUserId;
 }
 
 export async function getExpenses(filters?: { query?: string; type?: string }) {

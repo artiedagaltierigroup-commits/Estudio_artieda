@@ -1,5 +1,7 @@
 import { createCase } from "@/actions/cases";
 import { getClients } from "@/actions/clients";
+import { getOperationalClients } from "@/actions/operational";
+import { getWorkspaceAccess } from "@/lib/workspace-access";
 import { EmptyState } from "@/components/system/empty-state";
 import { PageHeader } from "@/components/system/page-header";
 import { Button } from "@/components/ui/button";
@@ -20,7 +22,8 @@ export default async function NuevoCasoPage({
   searchParams: Promise<{ clientId?: string }>;
 }) {
   const { clientId } = await searchParams;
-  const clients = await getClients();
+  const access = await getWorkspaceAccess();
+  const clients = await (access.role === "ADMIN" ? getClients() : getOperationalClients());
 
   return (
     <div className="space-y-6">
@@ -30,7 +33,7 @@ export default async function NuevoCasoPage({
         description="Carga inicial del expediente. Esta pantalla ya deja resuelta la asociacion con cliente y el contexto minimo del caso."
         stats={[
           { label: "Clientes disponibles", value: `${clients.length}` },
-          { label: "Flujo siguiente", value: "Registrar cobro" },
+          { label: "Flujo siguiente", value: access.role === "ADMIN" ? "Registrar cobro" : "Seguimiento del caso" },
         ]}
         actions={
           <Button asChild variant="outline">
@@ -51,6 +54,7 @@ export default async function NuevoCasoPage({
       ) : null}
 
       <CaseForm
+        role={access.role}
         action={handleSubmit}
         cancelHref="/casos"
         submitLabel="Guardar caso"

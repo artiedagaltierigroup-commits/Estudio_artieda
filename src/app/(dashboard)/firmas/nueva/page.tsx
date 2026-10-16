@@ -1,4 +1,5 @@
 import {
+  cancelSignatureRequest,
   createSignatureDraft,
   deleteSignatureRequest,
   getSignatureFormOptions,
@@ -12,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft, FileSignature } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { getWorkspaceAccess } from "@/lib/workspace-access";
 
 type SignatureRequestFormState = {
   error?: string | null;
@@ -28,7 +30,9 @@ async function handleSubmit(_state: SignatureRequestFormState, formData: FormDat
   const upload = await uploadSignatureDocument(requestId, formData);
 
   if (!upload.success) {
-    await deleteSignatureRequest(requestId);
+    const access = await getWorkspaceAccess();
+    if (access.role === "ADMIN") await deleteSignatureRequest(requestId);
+    else await cancelSignatureRequest(requestId);
     return { error: `No se pudo guardar el PDF: ${upload.error ?? "intenta nuevamente"}` };
   }
 

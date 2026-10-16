@@ -1,4 +1,6 @@
 import { getAnalyticsSnapshot, getDashboardOverview } from "@/actions/dashboard";
+import { getWorkspaceAccess } from "@/lib/workspace-access";
+import { OperationalHome } from "@/components/operational/workspace-pages";
 import {
   getRecurringPayableChecklist,
   markRecurringOccurrencePaid,
@@ -33,6 +35,9 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 export default async function DashboardPage() {
+  const access = await getWorkspaceAccess();
+  if (access.role === "COLLABORATOR") return <OperationalHome />;
+
   async function handleMarkPaid(formData: FormData) {
     "use server";
     const occurrenceId = String(formData.get("occurrenceId") ?? "");

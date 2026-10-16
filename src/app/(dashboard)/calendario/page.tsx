@@ -1,4 +1,6 @@
 import { getCalendarEvents } from "@/actions/calendar";
+import { getWorkspaceAccess } from "@/lib/workspace-access";
+import { ReminderCalendar } from "@/components/operational/reminder-calendar";
 import { EmptyState } from "@/components/system/empty-state";
 import { MoneyAmount } from "@/components/system/money-amount";
 import { PageHeader } from "@/components/system/page-header";
@@ -20,6 +22,8 @@ export default async function CalendarioPage({
   searchParams?: Promise<{ month?: string }>;
 }) {
   const params = (await searchParams) ?? {};
+  const access = await getWorkspaceAccess();
+  if (access.role === "COLLABORATOR") return <ReminderCalendar month={params.month} />;
   const referenceDate = params.month
     ? parse(`${params.month}-01`, "yyyy-MM-dd", new Date())
     : new Date();

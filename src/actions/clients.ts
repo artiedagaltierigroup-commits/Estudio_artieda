@@ -13,7 +13,10 @@ import {
 import { normalizeClientMutationInput } from "@/lib/client-mutations";
 import { summarizeCaseCharges, summarizeClientCases } from "@/lib/detail-summaries";
 import { summarizeSignatureRequests } from "@/lib/signature-summaries";
-import { createClient } from "@/lib/supabase/server";
+import { isOwnedSignatureRequestGraph } from "@/lib/signature-storage-scope";
+import { getWorkspaceAccess, requireAdminAccess } from "@/lib/workspace-access";
+import { operationalClientColumns, projectOperationalClient } from "@/lib/operational-projections";
+import { logActivity } from "@/lib/activity-log";
 import { deriveChargeStatus } from "@/lib/utils";
 
 const ClientSchema = z.object({
@@ -34,33 +37,26 @@ const InlineClientSchema = ClientSchema.pick({
   languages: true,
 });
 
-async function getUserId(): Promise<string> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) throw new Error("No autenticado");
-  return user.id;
-}
-
 export async function getClients(query?: string) {
-  const userId = await getUserId();
+  const { ownerUserId: userId } = await requireAdminAccess();
   const rows = await db.query.clients.findMany({
     where: (client, { eq: eqOperator }) => eqOperator(client.userId, userId),
     orderBy: (client, { asc }) => [asc(client.name)],
     with: {
       cases: {
+        where: (item, { eq }) => eq(item.userId, userId),
         orderBy: (currentCase, { desc }) => [desc(currentCase.updatedAt)],
         with: {
           charges: {
+            where: (item, { eq }) => eq(item.userId, userId),
             with: {
-              payments: true,
+              payments: { where: (item, { eq }) => eq(item.userId, userId) },
             },
           },
         },
       },
       reminders: {
+        where: (item, { eq }) => eq(item.userId, userId),
         orderBy: (reminder, { asc }) => [asc(reminder.reminderDate)],
       },
     },
@@ -90,18 +86,21 @@ export async function getClients(query?: string) {
 }
 
 export async function getClient(id: string) {
-  const userId = await getUserId();
-  const client = await db.query.clients.findFirst({
+  const { ownerUserId: userId } = await requireAdminAccess();
+  const row = await db.query.clients.findFirst({
     where: (item, { and: andOperator, eq: eqOperator }) =>
       andOperator(eqOperator(item.id, id), eqOperator(item.userId, userId)),
     with: {
       cases: {
+        where: (item, { eq }) => eq(item.userId, userId),
         orderBy: (currentCase, { desc }) => [desc(currentCase.updatedAt)],
         with: {
           charges: {
+            where: (item, { eq }) => eq(item.userId, userId),
             orderBy: (charge, { asc }) => [asc(charge.dueDate), asc(charge.createdAt)],
             with: {
               payments: {
+                where: (item, { eq }) => eq(item.userId, userId),
                 orderBy: (payment, { desc }) => [desc(payment.paymentDate), desc(payment.createdAt)],
               },
             },
@@ -109,13 +108,19 @@ export async function getClient(id: string) {
         },
       },
       reminders: {
+        where: (item, { eq }) => eq(item.userId, userId),
         orderBy: (reminder, { asc }) => [asc(reminder.reminderDate)],
       },
       savedSignature: true,
     },
   });
 
-  if (!client) return null;
+  if (!row) return null;
+  const client = {
+    ...row,
+    savedSignature: row.savedSignature?.userId === userId && row.savedSignature.clientId === row.id
+      ? row.savedSignature : null,
+  };
 
   const signatureRecipientRows = await db.query.signatureRecipients.findMany({
     where: (item, { and: andOperator, eq: eqOperator }) =>
@@ -123,10 +128,12 @@ export async function getClient(id: string) {
     with: {
       request: {
         with: {
+          client: { columns: { id: true, userId: true } },
           case: true,
           document: true,
           recipients: {
             orderBy: (recipient, { asc }) => [asc(recipient.sortOrder)],
+            with: { client: { columns: { id: true, userId: true } } },
           },
           events: {
             orderBy: (event, { desc }) => [desc(event.createdAt)],
@@ -140,6 +147,7 @@ export async function getClient(id: string) {
   const signatureRows = signatureRecipientRows
     .map((row) => row.request)
     .filter((request) => {
+      if (!isOwnedSignatureRequestGraph(request, userId)) return false;
       if (seenSignatureRequestIds.has(request.id)) return false;
       seenSignatureRequestIds.add(request.id);
       return true;
@@ -235,15 +243,17 @@ export async function getClient(id: string) {
 }
 
 export async function getClientRecord(id: string) {
-  const userId = await getUserId();
-  return db.query.clients.findFirst({
+  const { ownerUserId: userId } = await getWorkspaceAccess();
+  const client = await db.query.clients.findFirst({
+    columns: operationalClientColumns,
     where: (item, { and: andOperator, eq: eqOperator }) =>
       andOperator(eqOperator(item.id, id), eqOperator(item.userId, userId)),
   });
+  return client ? projectOperationalClient(client) : undefined;
 }
 
 export async function createClientAction(formData: FormData) {
-  const userId = await getUserId();
+  const { ownerUserId: userId, actorUserId } = await getWorkspaceAccess();
   const raw = Object.fromEntries(formData.entries());
   const parsed = ClientSchema.safeParse(raw);
   if (!parsed.success) return { error: parsed.error.errors[0].message };
@@ -252,6 +262,7 @@ export async function createClientAction(formData: FormData) {
     .insert(clients)
     .values({ ...normalizeClientMutationInput(parsed.data), userId })
     .returning();
+  await logActivity({ userId, actorUserId, entityType: "client", entityId: inserted.id, action: "created", newValue: parsed.data });
   revalidatePath("/clientes");
   return { success: true, clientId: inserted.id };
 }
@@ -263,7 +274,7 @@ export async function createClientInlineAction(input: {
   phone?: string;
   languages?: string;
 }) {
-  const userId = await getUserId();
+  const { ownerUserId: userId, actorUserId } = await getWorkspaceAccess();
   const parsed = InlineClientSchema.safeParse(input);
   if (!parsed.success) {
     return { error: parsed.error.errors[0].message };
@@ -273,6 +284,8 @@ export async function createClientInlineAction(input: {
     .insert(clients)
     .values({ ...normalizeClientMutationInput(parsed.data), userId })
     .returning({ id: clients.id, name: clients.name, email: clients.email, phone: clients.phone, taxId: clients.taxId });
+
+  await logActivity({ userId, actorUserId, entityType: "client", entityId: inserted.id, action: "created", newValue: parsed.data });
 
   revalidatePath("/clientes");
   revalidatePath("/casos");
@@ -284,15 +297,23 @@ export async function createClientInlineAction(input: {
 }
 
 export async function updateClient(id: string, formData: FormData) {
-  const userId = await getUserId();
+  const { ownerUserId: userId, actorUserId } = await getWorkspaceAccess();
   const raw = Object.fromEntries(formData.entries());
   const parsed = ClientSchema.safeParse(raw);
   if (!parsed.success) return { error: parsed.error.errors[0].message };
+
+  const existing = await db.query.clients.findFirst({
+    columns: operationalClientColumns,
+    where: (item, { and, eq }) => and(eq(item.id, id), eq(item.userId, userId)),
+  });
+  if (!existing) return { error: "Cliente no encontrado" };
 
   await db
     .update(clients)
     .set({ ...normalizeClientMutationInput(parsed.data), updatedAt: new Date() })
     .where(and(eq(clients.id, id), eq(clients.userId, userId)));
+
+  await logActivity({ userId, actorUserId, entityType: "client", entityId: id, action: "updated", previousValue: existing, newValue: parsed.data });
 
   revalidatePath("/clientes");
   revalidatePath(`/clientes/${id}`);
@@ -301,8 +322,13 @@ export async function updateClient(id: string, formData: FormData) {
 }
 
 export async function deleteClient(id: string) {
-  const userId = await getUserId();
+  const { ownerUserId: userId, actorUserId } = await requireAdminAccess();
+  const existing = await db.query.clients.findFirst({
+    where: (item, { and, eq }) => and(eq(item.id, id), eq(item.userId, userId)),
+  });
+  if (!existing) return { error: "Cliente no encontrado" };
   await db.delete(clients).where(and(eq(clients.id, id), eq(clients.userId, userId)));
+  await logActivity({ userId, actorUserId, entityType: "client", entityId: id, action: "deleted", previousValue: existing });
   revalidatePath("/clientes");
   return { success: true };
 }

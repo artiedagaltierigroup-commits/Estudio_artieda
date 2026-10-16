@@ -10,6 +10,8 @@ import { sendSignatureRequestEmail } from "../lib/signature-email";
 const harness = vi.hoisted(() => ({
   database: undefined as unknown,
   userId: "00000000-0000-4000-8000-000000000001",
+  ownerUserId: null as string | null,
+  role: "ADMIN" as "ADMIN" | "COLLABORATOR",
   objects: new Map<string, Buffer>(),
   failSignedUpload: false,
   uploads: [] as string[],
@@ -18,6 +20,14 @@ vi.mock("../db", () => ({ get db() { return harness.database; } }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("next/headers", () => ({ headers: async () => new Headers() }));
 vi.mock("../lib/supabase/server", () => ({ createClient: async () => ({ auth: { getUser: async () => ({ data: { user: { id: harness.userId } } }) } }) }));
+vi.mock("../lib/workspace-access", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../lib/workspace-access")>();
+  const access = () => ({ actorUserId: harness.userId, ownerUserId: harness.ownerUserId ?? harness.userId, role: harness.role });
+  return { ...actual, getWorkspaceAccess: async () => access(), requireAdminAccess: async () => {
+    if (harness.role !== "ADMIN") throw new actual.WorkspaceAccessError("ACCESS_DENIED");
+    return access();
+  } };
+});
 vi.mock("../lib/signature-email", () => ({
   sendSignatureRequestEmail: vi.fn(async () => undefined),
   buildSignedDocumentCopyEmail: vi.fn(() => ({})),
@@ -56,6 +66,7 @@ describe.skipIf(!testUrl)("signature safety against local PostgreSQL and simulat
   let signatureCron: typeof import("../app/api/cron/signatures/route");
   let emailOpen: typeof import("../app/api/signatures/email-open/[token]/route");
   const requestIds: string[] = [];
+  const clientIds: string[] = [];
 
   beforeAll(async () => {
     client = postgres(testUrl!, { max: 5, prepare: false });
@@ -70,6 +81,7 @@ describe.skipIf(!testUrl)("signature safety against local PostgreSQL and simulat
     vi.mocked(sendSignatureRequestEmail).mockReset().mockResolvedValue(undefined as never);
     harness.objects.clear(); harness.uploads = []; harness.failSignedUpload = false;
     harness.userId = "00000000-0000-4000-8000-000000000001";
+    harness.ownerUserId = null; harness.role = "ADMIN";
   });
   afterAll(async () => {
     vi.unstubAllEnvs();
@@ -77,6 +89,7 @@ describe.skipIf(!testUrl)("signature safety against local PostgreSQL and simulat
       await database.delete(schema.signatureRequests).where(eq(schema.signatureRequests.id, id));
       await database.delete(schema.activityLog).where(eq(schema.activityLog.entityId, id));
     }
+    for (const id of clientIds) await database.delete(schema.clients).where(eq(schema.clients.id, id));
     await client?.end();
   });
 
@@ -119,6 +132,76 @@ describe.skipIf(!testUrl)("signature safety against local PostgreSQL and simulat
   async function read(id: string) {
     return (await database.query.signatureRequests.findFirst({ where: eq(schema.signatureRequests.id, id), with: { document: true, recipients: true, events: true } }))!;
   }
+
+  async function seedCase(userId = harness.userId) {
+    const [customer] = await database.insert(schema.clients).values({ userId, name: "Synthetic client", email: "test@example.invalid" }).returning();
+    clientIds.push(customer.id);
+    const [matter] = await database.insert(schema.cases).values({ userId, clientId: customer.id, title: "Synthetic case", fee: "88000.00", preferredPaymentMethod: "PRIVATE_METHOD" }).returning();
+    return { customer, matter };
+  }
+  function useCollaborator() {
+    harness.ownerUserId = harness.userId; harness.userId = "00000000-0000-4000-8000-000000000003"; harness.role = "COLLABORATOR";
+  }
+  function draftForm(clientId: string, caseId: string) {
+    const form = new FormData();
+    form.set("subject", "Synthetic collaborator draft"); form.set("message", "Shared text can mention $88000"); form.set("caseId", caseId);
+    form.set("recipients[0].email", "test@example.invalid"); form.set("recipients[0].firstName", "Synthetic"); form.set("recipients[0].clientId", clientId);
+    form.set("recipients[0].placements[0].pageNumber", "1"); form.set("recipients[0].placements[0].x", "0.1"); form.set("recipients[0].placements[0].y", "0.1");
+    form.set("recipients[0].placements[0].width", "0.2"); form.set("recipients[0].placements[0].height", "0.1");
+    return form;
+  }
+
+  it("returns real shared office signatures without nested case financial columns", async () => {
+    const { customer, matter } = await seedCase(); const fixture = await seed("READY");
+    await database.update(schema.signatureRequests).set({ clientId: customer.id, caseId: matter.id }).where(eq(schema.signatureRequests.id, fixture.request.id));
+    useCollaborator();
+    const detail = await actions.getSignatureRequest(fixture.request.id);
+    expect(detail?.case).toMatchObject({ id: matter.id, title: matter.title });
+    expect(detail?.case).not.toHaveProperty("fee"); expect(detail?.case).not.toHaveProperty("preferredPaymentMethod");
+    const listItem = (await actions.getSignatureRequests()).find((request) => request.id === fixture.request.id);
+    expect(listItem?.case).toEqual(detail?.case);
+    const options = await actions.getSignatureFormOptions();
+    expect(options.cases.find((item) => item.id === matter.id)).toEqual({ id: matter.id, title: matter.title, clientId: customer.id, clientName: customer.name });
+    const { getAuthenticatedSignatureRequest } = await import("../app/api/signatures/[id]/downloads");
+    const download = await getAuthenticatedSignatureRequest(fixture.request.id);
+    expect(download).toMatchObject({ userId: harness.ownerUserId, actorUserId: harness.userId, request: { case: detail?.case } });
+  });
+
+  it("creates, uploads and sends on behalf of the office while recording the collaborator", async () => {
+    const { customer, matter } = await seedCase();
+    const source = await seed("READY"); useCollaborator();
+    const draft = await actions.createSignatureDraft(draftForm(customer.id, matter.id));
+    expect(draft).toHaveProperty("success", true);
+    if (!draft.signatureRequestId) throw new Error("Missing synthetic draft");
+    requestIds.push(draft.signatureRequestId);
+    const form = new FormData(); form.set("document", new File([new Uint8Array(source.bytes)], "collaborator.pdf", { type: "application/pdf" }));
+    expect(await actions.uploadSignatureDocument(draft.signatureRequestId, form)).toHaveProperty("success", true);
+    expect(await actions.updateSignaturePlacement(draft.signatureRequestId, { pageNumber: 1, x: .1, y: .1, width: .2, height: .1 })).toHaveProperty("success", true);
+    expect(await actions.sendSignatureRequest(draft.signatureRequestId)).toHaveProperty("success", true);
+    const after = await read(draft.signatureRequestId);
+    expect(after.userId).toBe(harness.ownerUserId); expect(after.recipients[0].userId).toBe(harness.ownerUserId);
+    expect(after.document?.originalStoragePath).toMatch(new RegExp(`^${harness.ownerUserId}/signature-requests/${after.id}/original/`));
+    expect(after.events.every((event) => (event.metadata as { actorUserId: string }).actorUserId === harness.userId)).toBe(true);
+    const audits = await database.query.activityLog.findMany({ where: eq(schema.activityLog.entityId, after.id) });
+    expect(audits.length).toBeGreaterThan(0);
+    expect(audits.every((event) => event.userId === harness.ownerUserId && event.actorUserId === harness.userId)).toBe(true);
+  });
+
+  it("a collaborator cannot permanently delete an office request", async () => {
+    const fixture = await seed("READY"); useCollaborator();
+    await expect(actions.deleteSignatureRequest(fixture.request.id)).rejects.toHaveProperty("code", "ACCESS_DENIED");
+    expect((await read(fixture.request.id)).status).toBe("READY");
+  });
+
+  it("a collaborator cannot read or attach another office's case or client", async () => {
+    const foreign = await seedCase("00000000-0000-4000-8000-000000000002");
+    const own = await seedCase(); useCollaborator();
+    expect(await actions.createSignatureDraft(draftForm(foreign.customer.id, own.matter.id))).toHaveProperty("error", "Cliente no encontrado");
+    expect(await actions.createSignatureDraft(draftForm(own.customer.id, foreign.matter.id))).toHaveProperty("error", "Caso no encontrado");
+    const options = await actions.getSignatureFormOptions();
+    expect(options.clients.some((row) => row.id === foreign.customer.id)).toBe(false);
+    expect(options.cases.some((row) => row.id === foreign.matter.id)).toBe(false);
+  });
 
   it("opening an expired link preserves a completed signature and its completion date", async () => {
     const fixture = await seed("SIGNED");

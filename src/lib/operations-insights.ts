@@ -22,6 +22,7 @@ interface CalendarEventLike {
 
 interface ActivityLike {
   entityType:
+    | "client"
     | "case"
     | "charge"
     | "document"
@@ -192,6 +193,7 @@ export function summarizeActivityMetrics(entries: Pick<ActivityLike, "action" | 
   };
 
   const entities = {
+    client: 0,
     case: 0,
     charge: 0,
     payment: 0,

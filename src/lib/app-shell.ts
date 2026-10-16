@@ -13,6 +13,7 @@ import {
   Users,
   type LucideIcon,
 } from "lucide-react";
+import { canAccessWorkspacePath, type WorkspaceRole } from "@/lib/workspace-permissions";
 
 export interface DashboardNavItem {
   href: string;
@@ -96,8 +97,15 @@ export const dashboardNavigation: DashboardNavItem[] = [
   },
 ];
 
-export function getRouteMeta(pathname: string) {
-  const matchedRoute = dashboardNavigation.find((item) =>
+export function getDashboardNavigation(role: WorkspaceRole) {
+  if (role === "ADMIN") return dashboardNavigation;
+  return dashboardNavigation.filter((item) => canAccessWorkspacePath(role, item.href)).map((item) =>
+    item.href === "/" ? { ...item, label: "Inicio" } : item
+  );
+}
+
+export function getRouteMeta(pathname: string, role: WorkspaceRole = "ADMIN") {
+  const matchedRoute = getDashboardNavigation(role).find((item) =>
     item.href === "/" ? pathname === "/" : pathname.startsWith(item.href)
   );
 

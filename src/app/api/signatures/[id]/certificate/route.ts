@@ -25,7 +25,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   const result = await getAuthenticatedSignatureRequest(id);
   if ("error" in result) return result.error;
 
-  const { request, userId } = result;
+  const { request, userId, actorUserId } = result;
   if (request.status !== "SIGNED" || !request.document?.signedSha256) {
     return jsonError("La constancia todavia no esta disponible", 409);
   }
@@ -80,6 +80,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 
   await logSignatureArtifactDownload({
     userId,
+    actorUserId,
     requestId: request.id,
     documentId: request.document.id,
     artifact: "certificate",

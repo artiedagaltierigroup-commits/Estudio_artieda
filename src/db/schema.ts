@@ -8,6 +8,7 @@ import {
   index,
   jsonb,
   pgEnum,
+  pgSchema,
   pgTable,
   text,
   timestamp,
@@ -77,6 +78,7 @@ export const signatureEventTypeEnum = pgEnum("signature_event_type", [
   "downloaded",
 ]);
 export const entityTypeEnum = pgEnum("entity_type", [
+  "client",
   "case",
   "charge",
   "document",
@@ -99,6 +101,19 @@ export const actionTypeEnum = pgEnum("action_type", [
   "cancelled",
   "downloaded",
 ]);
+
+export const appPrivate = pgSchema("app_private");
+export const workspaceMembers = appPrivate.table("workspace_members", {
+  userId: uuid("user_id").primaryKey(),
+  ownerUserId: uuid("owner_user_id").notNull(),
+  role: text("role").$type<"ADMIN" | "COLLABORATOR">().notNull(),
+  enabled: boolean("enabled").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, table => ({
+  roleCheck: check("workspace_members_role_check", sql`${table.role} in ('ADMIN', 'COLLABORATOR')`),
+  scopeCheck: check("workspace_members_scope_check", sql`(${table.role} = 'ADMIN' and ${table.userId} = ${table.ownerUserId}) or (${table.role} = 'COLLABORATOR' and ${table.userId} <> ${table.ownerUserId})`),
+  ownerIdx: index("workspace_members_owner_idx").on(table.ownerUserId),
+})).enableRLS();
 
 export const clients = pgTable(
   "clients",
@@ -381,6 +396,7 @@ export const activityLog = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     userId: uuid("user_id").notNull(),
+    actorUserId: uuid("actor_user_id"),
     entityType: entityTypeEnum("entity_type").notNull(),
     entityId: uuid("entity_id").notNull(),
     action: actionTypeEnum("action").notNull(),

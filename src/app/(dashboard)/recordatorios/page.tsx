@@ -6,6 +6,7 @@ import {
   getReminders,
   reopenReminder,
 } from "@/actions/reminders";
+import { getWorkspaceAccess } from "@/lib/workspace-access";
 import {
   getRecurringPayableAlerts,
   markRecurringOccurrencePaid,
@@ -24,7 +25,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { getReminderPriorityTone } from "@/lib/module-presenters";
 import { sortRemindersForPanel, summarizeReminderPanel } from "@/lib/operations-insights";
 import { formatDate, formatDateTime, getPriorityLabel } from "@/lib/utils";
-import { Bell, CalendarCheck2, CheckCircle2, Clock3, Plus, RotateCcw, Trash2 } from "lucide-react";
+import { Bell, CalendarCheck2, CheckCircle2, Clock3, PencilLine, Plus, RotateCcw, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
@@ -74,10 +75,11 @@ const selectClassName =
   "flex h-11 w-full rounded-2xl border border-input bg-background px-4 py-2 text-sm text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
 export default async function RecordatoriosPage() {
+  const access = await getWorkspaceAccess();
   const [list, references, recurringAlerts] = await Promise.all([
     getReminders(),
     getReminderReferences(),
-    getRecurringPayableAlerts(new Date()),
+    access.role === "ADMIN" ? getRecurringPayableAlerts(new Date()) : Promise.resolve([]),
   ]);
   const summary = summarizeReminderPanel(list);
   const pending = sortRemindersForPanel(list.filter((item) => !item.completed));
@@ -261,6 +263,7 @@ export default async function RecordatoriosPage() {
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-2">
+                    <Button asChild variant="outline"><Link href={`/recordatorios/${item.id}/editar`}><PencilLine className="h-4 w-4" />Editar</Link></Button>
                     <form action={handleComplete}>
                       <input type="hidden" name="reminderId" value={item.id} />
                       <SubmitButton variant="secondary" pendingLabel="Resolviendo...">
@@ -268,13 +271,13 @@ export default async function RecordatoriosPage() {
                         Resolver
                       </SubmitButton>
                     </form>
-                    <form action={handleDelete}>
+                    {access.role === "ADMIN" ? <form action={handleDelete}>
                       <input type="hidden" name="reminderId" value={item.id} />
                       <SubmitButton variant="ghost" className="text-[#9a4e69]" pendingLabel="Eliminando...">
                         <Trash2 className="h-4 w-4" />
                         Eliminar
                       </SubmitButton>
-                    </form>
+                    </form> : null}
                   </div>
                 </div>
               </div>
@@ -302,6 +305,8 @@ export default async function RecordatoriosPage() {
                   <p className="text-xs text-muted-foreground">{formatDateTime(item.reminderDate)}</p>
                 </div>
               </div>
+              <div className="flex flex-wrap gap-2">
+              <Button asChild variant="outline"><Link href={`/recordatorios/${item.id}/editar`}>Editar</Link></Button>
               <form action={handleReopen}>
                 <input type="hidden" name="reminderId" value={item.id} />
                 <SubmitButton variant="ghost" pendingLabel="Reabriendo...">
@@ -309,6 +314,7 @@ export default async function RecordatoriosPage() {
                   Reabrir
                 </SubmitButton>
               </form>
+              </div>
             </div>
           ))}
         </SectionCard>

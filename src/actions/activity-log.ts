@@ -1,16 +1,10 @@
 "use server";
 
 import { db } from "../db";
-import { createClient } from "../lib/supabase/server";
+import { requireAdminAccess } from "@/lib/workspace-access";
 
 async function getUserId(): Promise<string> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) throw new Error("No autenticado");
-  return user.id;
+  return (await requireAdminAccess()).ownerUserId;
 }
 
 export async function getActivityLog() {

@@ -19,17 +19,11 @@ import {
   getComparisonDelta,
   getPreviousEquivalentRange,
 } from "@/lib/statistics-insights";
-import { createClient } from "@/lib/supabase/server";
+import { requireAdminAccess } from "@/lib/workspace-access";
 import { getPendingRecurringProjection } from "./recurring-expenses";
 
 async function getUserId(): Promise<string> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) throw new Error("No autenticado");
-  return user.id;
+  return (await requireAdminAccess()).ownerUserId;
 }
 
 export interface DashboardFilters {
@@ -129,12 +123,21 @@ export interface StatisticsSnapshot {
   topCases: Array<{ caseId: string; caseTitle: string; clientName: string; collected: number }>;
 }
 
+function isOwnedCase(row: {
+  id: string;
+  userId: string;
+  clientId: string;
+  client: { id: string; userId: string } | null;
+} | null, userId: string) {
+  return Boolean(row && row.userId === userId && row.client?.userId === userId && row.client.id === row.clientId);
+}
+
 async function getBaseData(userId: string) {
   const [chargeRows, paymentRows, expenseRows, reminderRows, caseRows] = await Promise.all([
     db.query.charges.findMany({
       where: (item, { eq: eqOperator }) => eqOperator(item.userId, userId),
       with: {
-        payments: true,
+        payments: { where: (item, { eq }) => eq(item.userId, userId) },
         case: { with: { client: true } },
       },
       orderBy: (item, { desc }) => [desc(item.updatedAt)],
@@ -152,7 +155,7 @@ async function getBaseData(userId: string) {
       where: (item, { eq: eqOperator }) => eqOperator(item.userId, userId),
       with: {
         client: true,
-        case: true,
+        case: { with: { client: true } },
       },
       orderBy: (item, { asc }) => [asc(item.reminderDate)],
     }),
@@ -162,7 +165,8 @@ async function getBaseData(userId: string) {
     }),
   ]);
 
-  const charges = chargeRows.map((charge) => {
+  const charges = chargeRows.filter((row) => row.userId === userId && isOwnedCase(row.case, userId)).map((row) => {
+    const charge = { ...row, payments: row.payments.filter((payment) => payment.userId === userId && payment.chargeId === row.id) };
     const summary = summarizeChargeRecord(charge);
     return {
       ...charge,
@@ -174,7 +178,16 @@ async function getBaseData(userId: string) {
     };
   });
 
-  return { charges, paymentRows, expenseRows, reminderRows, caseRows };
+  const ownedChargeIds = new Set(charges.map((charge) => charge.id));
+  return {
+    charges,
+    paymentRows: paymentRows.filter((payment) => payment.userId === userId && ownedChargeIds.has(payment.chargeId)),
+    expenseRows,
+    reminderRows: reminderRows.filter((reminder) => reminder.userId === userId &&
+      (!reminder.clientId || (reminder.client?.userId === userId && reminder.client.id === reminder.clientId)) &&
+      (!reminder.caseId || (reminder.case?.id === reminder.caseId && isOwnedCase(reminder.case, userId)))),
+    caseRows: caseRows.filter((row) => isOwnedCase(row, userId)),
+  };
 }
 
 function getChargeStatusColor(status: string) {
@@ -358,7 +371,7 @@ export async function getStatisticsFilterOptions(): Promise<StatisticsFilterOpti
 
   return {
     clients: clientRows.map((item) => ({ id: item.id, name: item.name })),
-    cases: caseRows.map((item) => ({
+    cases: caseRows.filter((item) => isOwnedCase(item, userId)).map((item) => ({
       id: item.id,
       title: item.title,
       clientId: item.clientId,

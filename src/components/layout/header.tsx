@@ -6,6 +6,7 @@ import { Eye, EyeOff, LogOut, Menu, PanelLeftClose, PanelLeftOpen } from "lucide
 import { toast } from "sonner";
 import { getRouteMeta } from "@/lib/app-shell";
 import { useMoneyVisibility } from "@/components/system/money-visibility-provider";
+import { useWorkspaceRole } from "@/components/system/workspace-role-provider";
 
 interface HeaderProps {
   email?: string;
@@ -18,7 +19,8 @@ export function Header({ email, sidebarCollapsed, onToggleSidebar, onOpenMobileN
   const router = useRouter();
   const pathname = usePathname();
   const supabase = createClient();
-  const routeMeta = getRouteMeta(pathname);
+  const role = useWorkspaceRole();
+  const routeMeta = getRouteMeta(pathname, role);
   const { isMoneyHidden, toggleMoneyVisibility } = useMoneyVisibility();
 
   async function handleLogout() {
@@ -52,7 +54,7 @@ export function Header({ email, sidebarCollapsed, onToggleSidebar, onOpenMobileN
       </div>
       <div className="flex items-center gap-4">
         {email && <span className="hidden text-sm text-muted-foreground sm:block">{email}</span>}
-        <button
+        {role === "ADMIN" ? <button
           type="button"
           onClick={toggleMoneyVisibility}
           aria-label={isMoneyHidden ? "Mostrar montos" : "Ocultar montos"}
@@ -62,7 +64,7 @@ export function Header({ email, sidebarCollapsed, onToggleSidebar, onOpenMobileN
           title={isMoneyHidden ? "Mostrar montos" : "Ocultar montos"}
         >
           {isMoneyHidden ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-        </button>
+        </button> : null}
         <button
           onClick={handleLogout}
           className="flex items-center gap-2 rounded-full border border-border bg-background px-4 py-2 text-sm text-muted-foreground transition-colors hover:text-foreground"

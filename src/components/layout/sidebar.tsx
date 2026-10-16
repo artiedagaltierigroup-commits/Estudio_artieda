@@ -4,7 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Scale, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { dashboardNavigation } from "@/lib/app-shell";
+import { getDashboardNavigation } from "@/lib/app-shell";
+import { useWorkspaceRole } from "@/components/system/workspace-role-provider";
 
 function NavigationLinks({
   collapsed,
@@ -14,10 +15,11 @@ function NavigationLinks({
   onNavigate?: () => void;
 }) {
   const pathname = usePathname();
+  const navigation = getDashboardNavigation(useWorkspaceRole());
 
   return (
     <nav className={cn("flex-1 space-y-1 overflow-y-auto py-4", collapsed ? "px-3" : "px-4")}>
-      {dashboardNavigation.map((item) => {
+      {navigation.map((item) => {
         const Icon = item.icon;
         const isActive = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
 

@@ -1,4 +1,6 @@
 import { getClient } from "@/actions/clients";
+import { getWorkspaceAccess } from "@/lib/workspace-access";
+import { OperationalClientPage } from "@/components/operational/workspace-pages";
 import { EmptyState } from "@/components/system/empty-state";
 import { MetricCard } from "@/components/system/metric-card";
 import { MoneyAmount } from "@/components/system/money-amount";
@@ -48,6 +50,8 @@ function getSignatureProgress(request: { recipients?: Array<{ status: string }> 
 
 export default async function ClienteDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const access = await getWorkspaceAccess();
+  if (access.role === "COLLABORATOR") return <OperationalClientPage id={id} />;
   const client = await getClient(id);
   if (!client) notFound();
 

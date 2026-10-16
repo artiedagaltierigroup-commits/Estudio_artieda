@@ -1,4 +1,6 @@
 import { getCase } from "@/actions/cases";
+import { getWorkspaceAccess } from "@/lib/workspace-access";
+import { OperationalCasePage } from "@/components/operational/workspace-pages";
 import { EmptyState } from "@/components/system/empty-state";
 import { MetricCard } from "@/components/system/metric-card";
 import { MoneyAmount } from "@/components/system/money-amount";
@@ -49,6 +51,8 @@ function getSignatureProgress(request: { recipients?: Array<{ status: string }> 
 
 export default async function CaseDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const access = await getWorkspaceAccess();
+  if (access.role === "COLLABORATOR") return <OperationalCasePage id={id} />;
   const caseData = await getCase(id);
   if (!caseData) notFound();
 

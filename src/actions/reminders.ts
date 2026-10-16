@@ -5,7 +5,11 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db } from "@/db";
 import { reminders } from "@/db/schema";
-import { createClient } from "@/lib/supabase/server";
+import { getWorkspaceAccess, requireAdminAccess } from "@/lib/workspace-access";
+import {
+  operationalCaseColumns, operationalClientColumns, operationalReminderColumns,
+  projectOperationalCase, projectOperationalClient, projectOperationalReminder,
+} from "@/lib/operational-projections";
 import { normalizeReminderMutationInput } from "@/lib/form-normalizers";
 import { logActivity } from "@/lib/activity-log";
 
@@ -14,47 +18,48 @@ const ReminderSchema = z.object({
   clientId: z.string().uuid().optional().or(z.literal("")),
   title: z.string().min(1, "El titulo es obligatorio"),
   description: z.string().optional(),
-  reminderDate: z.string().min(1, "La fecha es obligatoria"),
+  reminderDate: z.string().min(1, "La fecha es obligatoria")
+    .refine(value => !Number.isNaN(new Date(value).getTime()), "La fecha es inválida"),
   priority: z.enum(["LOW", "MEDIUM", "HIGH"]).default("MEDIUM"),
 });
 
-async function getUserId(): Promise<string> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) throw new Error("No autenticado");
-  return user.id;
-}
-
 export async function getReminders() {
-  const userId = await getUserId();
+  const { ownerUserId: userId } = await getWorkspaceAccess();
   const rows = await db.query.reminders.findMany({
+    columns: operationalReminderColumns,
     where: (item, { eq: eqOperator }) => eqOperator(item.userId, userId),
     with: {
-      case: { with: { client: true } },
-      client: true,
+      case: { columns: operationalCaseColumns, with: { client: { columns: operationalClientColumns } } },
+      client: { columns: operationalClientColumns },
     },
     orderBy: (item, { asc }) => [asc(item.reminderDate)],
   });
   return rows.filter(row =>
     (!row.client || row.client.userId === userId) &&
     (!row.case || (row.case.userId === userId && row.case.client.userId === userId))
-  );
+  ).map(row => ({
+    ...projectOperationalReminder(row),
+    client: row.client ? projectOperationalClient(row.client) : null,
+    case: row.case ? {
+      ...projectOperationalCase(row.case),
+      client: projectOperationalClient(row.case.client),
+    } : null,
+  }));
 }
 
 async function ownsReminderReferences(userId: string, values: { clientId?: string; caseId?: string }) {
   if (values.clientId) {
     const client = await db.query.clients.findFirst({
+      columns: { id: true },
       where: (item, { and, eq }) => and(eq(item.id, values.clientId!), eq(item.userId, userId)),
     });
     if (!client) return false;
   }
   if (values.caseId) {
     const linkedCase = await db.query.cases.findFirst({
+      columns: { id: true, clientId: true },
       where: (item, { and, eq }) => and(eq(item.id, values.caseId!), eq(item.userId, userId)),
-      with: { client: true },
+      with: { client: { columns: { userId: true } } },
     });
     if (!linkedCase || linkedCase.client.userId !== userId) return false;
   }
@@ -62,17 +67,19 @@ async function ownsReminderReferences(userId: string, values: { clientId?: strin
 }
 
 export async function getReminderReferences() {
-  const userId = await getUserId();
+  const { ownerUserId: userId } = await getWorkspaceAccess();
 
   const [clientRows, caseRows] = await Promise.all([
     db.query.clients.findMany({
+      columns: { id: true, name: true },
       where: (item, { eq: eqOperator }) => eqOperator(item.userId, userId),
       orderBy: (item, { asc }) => [asc(item.name)],
     }),
     db.query.cases.findMany({
+      columns: { id: true, title: true },
       where: (item, { eq: eqOperator }) => eqOperator(item.userId, userId),
       orderBy: (item, { asc }) => [asc(item.title)],
-      with: { client: true },
+      with: { client: { columns: { userId: true, name: true } } },
     }),
   ]);
 
@@ -87,7 +94,7 @@ export async function getReminderReferences() {
 }
 
 export async function createReminder(formData: FormData) {
-  const userId = await getUserId();
+  const { ownerUserId: userId, actorUserId } = await getWorkspaceAccess();
   const raw = Object.fromEntries(formData.entries());
   const parsed = ReminderSchema.safeParse(raw);
   if (!parsed.success) return { error: parsed.error.errors[0].message };
@@ -104,6 +111,7 @@ export async function createReminder(formData: FormData) {
 
   await logActivity({
     userId,
+    actorUserId,
     entityType: "reminder",
     entityId: inserted.id,
     action: "created",
@@ -115,7 +123,7 @@ export async function createReminder(formData: FormData) {
 }
 
 export async function updateReminder(id: string, formData: FormData) {
-  const userId = await getUserId();
+  const { ownerUserId: userId, actorUserId } = await getWorkspaceAccess();
   const raw = Object.fromEntries(formData.entries());
   const parsed = ReminderSchema.safeParse(raw);
   if (!parsed.success) return { error: parsed.error.errors[0].message };
@@ -133,6 +141,7 @@ export async function updateReminder(id: string, formData: FormData) {
 
   await logActivity({
     userId,
+    actorUserId,
     entityType: "reminder",
     entityId: id,
     action: "updated",
@@ -144,7 +153,7 @@ export async function updateReminder(id: string, formData: FormData) {
 }
 
 export async function completeReminder(id: string) {
-  const userId = await getUserId();
+  const { ownerUserId: userId, actorUserId } = await getWorkspaceAccess();
   const existing = await db.query.reminders.findFirst({
     where: (item, { and: andOperator, eq: eqOperator }) =>
       andOperator(eqOperator(item.id, id), eqOperator(item.userId, userId)),
@@ -158,6 +167,7 @@ export async function completeReminder(id: string) {
 
   await logActivity({
     userId,
+    actorUserId,
     entityType: "reminder",
     entityId: id,
     action: "status_changed",
@@ -171,7 +181,7 @@ export async function completeReminder(id: string) {
 }
 
 export async function reopenReminder(id: string) {
-  const userId = await getUserId();
+  const { ownerUserId: userId, actorUserId } = await getWorkspaceAccess();
   const existing = await db.query.reminders.findFirst({
     where: (item, { and: andOperator, eq: eqOperator }) =>
       andOperator(eqOperator(item.id, id), eqOperator(item.userId, userId)),
@@ -185,6 +195,7 @@ export async function reopenReminder(id: string) {
 
   await logActivity({
     userId,
+    actorUserId,
     entityType: "reminder",
     entityId: id,
     action: "status_changed",
@@ -198,7 +209,7 @@ export async function reopenReminder(id: string) {
 }
 
 export async function deleteReminder(id: string) {
-  const userId = await getUserId();
+  const { ownerUserId: userId, actorUserId } = await requireAdminAccess();
   const existing = await db.query.reminders.findFirst({
     where: (item, { and: andOperator, eq: eqOperator }) =>
       andOperator(eqOperator(item.id, id), eqOperator(item.userId, userId)),
@@ -209,6 +220,7 @@ export async function deleteReminder(id: string) {
 
   await logActivity({
     userId,
+    actorUserId,
     entityType: "reminder",
     entityId: id,
     action: "deleted",

@@ -1,5 +1,7 @@
 import { getCaseRecord, updateCase } from "@/actions/cases";
 import { getClients } from "@/actions/clients";
+import { getOperationalCase, getOperationalClients } from "@/actions/operational";
+import { getWorkspaceAccess } from "@/lib/workspace-access";
 import { CaseForm } from "@/components/cases/case-form";
 import { PageHeader } from "@/components/system/page-header";
 import { Button } from "@/components/ui/button";
@@ -9,7 +11,10 @@ import { notFound, redirect } from "next/navigation";
 
 export default async function EditarCasoPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [currentCase, clients] = await Promise.all([getCaseRecord(id), getClients()]);
+  const access = await getWorkspaceAccess();
+  const [currentCase, clients] = access.role === "ADMIN"
+    ? await Promise.all([getCaseRecord(id), getClients()])
+    : await Promise.all([getOperationalCase(id), getOperationalClients()]);
   if (!currentCase) notFound();
 
   async function handleSubmit(formData: FormData) {
@@ -39,6 +44,7 @@ export default async function EditarCasoPage({ params }: { params: Promise<{ id:
       />
 
       <CaseForm
+        role={access.role}
         action={handleSubmit}
         cancelHref={`/casos/${id}`}
         submitLabel="Guardar cambios"

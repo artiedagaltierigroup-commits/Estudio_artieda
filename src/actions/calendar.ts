@@ -3,7 +3,7 @@
 import { format } from "date-fns";
 import { db } from "@/db";
 import { listRecurringDueDates } from "@/lib/recurring-expense-occurrences";
-import { createClient } from "@/lib/supabase/server";
+import { requireAdminAccess } from "@/lib/workspace-access";
 
 export type CalendarEventType = "charge" | "reminder" | "expense" | "recurring";
 
@@ -26,13 +26,7 @@ const COLOR_MAP: Record<CalendarEventType, string> = {
 };
 
 async function getUserId(): Promise<string> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) throw new Error("No autenticado");
-  return user.id;
+  return (await requireAdminAccess()).ownerUserId;
 }
 
 export async function getCalendarEvents(from: string, to: string): Promise<CalendarEvent[]> {
@@ -51,7 +45,8 @@ export async function getCalendarEvents(from: string, to: string): Promise<Calen
   });
 
   for (const charge of chargeRows) {
-    if (!charge.dueDate) continue;
+    if (!charge.dueDate || charge.userId !== userId || charge.case?.userId !== userId ||
+        charge.case.client?.userId !== userId) continue;
 
     events.push({
       id: `charge-${charge.id}`,

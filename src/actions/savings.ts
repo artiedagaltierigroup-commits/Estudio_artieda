@@ -6,7 +6,7 @@ import { z } from "zod";
 import { db } from "@/db";
 import { expenses, savingsContributions, savingsGoals } from "@/db/schema";
 import { buildSavingsGoalView } from "@/lib/savings-insights";
-import { createClient } from "@/lib/supabase/server";
+import { requireAdminAccess } from "@/lib/workspace-access";
 import { logActivity } from "@/lib/activity-log";
 
 const SavingsGoalSchema = z.object({
@@ -33,13 +33,7 @@ function normalizeOptionalText(value?: string) {
 }
 
 async function getUserId(): Promise<string> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) throw new Error("No autenticado");
-  return user.id;
+  return (await requireAdminAccess()).ownerUserId;
 }
 
 function revalidateSavingsSurfaces(goalId?: string) {

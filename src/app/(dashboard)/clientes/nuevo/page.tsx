@@ -1,4 +1,5 @@
 import { createClientAction } from "@/actions/clients";
+import { getWorkspaceAccess } from "@/lib/workspace-access";
 import { ClientForm } from "@/components/clients/client-form";
 import { PageHeader } from "@/components/system/page-header";
 import { Button } from "@/components/ui/button";
@@ -12,13 +13,14 @@ async function handleSubmit(formData: FormData) {
   if (result.success) redirect(`/clientes/${result.clientId}`);
 }
 
-export default function NuevoClientePage() {
+export default async function NuevoClientePage() {
+  const access = await getWorkspaceAccess();
   return (
     <div className="space-y-6">
       <PageHeader
         eyebrow="Alta base"
         title="Nuevo cliente"
-        description="Carga inicial de la ficha del cliente. Con esto ya queda listo para asociar casos, cobros y recordatorios."
+        description={access.role === "ADMIN" ? "Carga inicial de la ficha del cliente. Con esto ya queda listo para asociar casos, cobros y recordatorios." : "Carga los datos de contacto y las notas del cliente para asociar sus casos y recordatorios."}
         stats={[
           { label: "Modulo", value: "Clientes" },
           { label: "Siguiente paso", value: "Abrir un caso" },
@@ -33,7 +35,7 @@ export default function NuevoClientePage() {
         }
       />
 
-      <ClientForm action={handleSubmit} cancelHref="/clientes" submitLabel="Guardar cliente" />
+      <ClientForm role={access.role} action={handleSubmit} cancelHref="/clientes" submitLabel="Guardar cliente" />
     </div>
   );
 }

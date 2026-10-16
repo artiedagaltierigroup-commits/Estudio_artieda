@@ -1,4 +1,5 @@
 import { getClientRecord, updateClient } from "@/actions/clients";
+import { getWorkspaceAccess } from "@/lib/workspace-access";
 import { ClientForm } from "@/components/clients/client-form";
 import { PageHeader } from "@/components/system/page-header";
 import { Button } from "@/components/ui/button";
@@ -8,6 +9,7 @@ import { notFound, redirect } from "next/navigation";
 
 export default async function EditarClientePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const access = await getWorkspaceAccess();
   const client = await getClientRecord(id);
   if (!client) notFound();
 
@@ -37,6 +39,7 @@ export default async function EditarClientePage({ params }: { params: Promise<{ 
         }
       />
       <ClientForm
+        role={access.role}
         action={handleSubmit}
         cancelHref={`/clientes/${id}`}
         submitLabel="Guardar cambios"

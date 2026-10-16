@@ -4,16 +4,10 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/db";
 import { cases, charges, clients, expenses, payments, recurringExpenses, reminders } from "@/db/schema";
 import { buildDemoWorkspaceSeed } from "@/lib/demo-seed";
-import { createClient } from "@/lib/supabase/server";
+import { requireAdminAccess } from "@/lib/workspace-access";
 
 async function getUserId(): Promise<string> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) throw new Error("No autenticado");
-  return user.id;
+  return (await requireAdminAccess()).ownerUserId;
 }
 
 export async function seedDemoWorkspace() {
