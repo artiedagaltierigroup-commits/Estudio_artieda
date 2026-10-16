@@ -118,8 +118,7 @@ export async function sendSignatureRequestEmail(params: SendSignatureRequestEmai
   const from = process.env.SIGNATURE_EMAIL_FROM;
 
   if (!apiKey || !from) {
-    console.info("Signature email skipped: missing RESEND_API_KEY or SIGNATURE_EMAIL_FROM", params);
-    return { skipped: true };
+    throw new Error("El servicio de correo de firmas no esta configurado");
   }
 
   const response = await fetch("https://api.resend.com/emails", {

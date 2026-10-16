@@ -13,7 +13,7 @@ import {
 } from "date-fns";
 
 export type RecurringExpenseMode = "AUTOMATIC" | "PAYABLE";
-export type RecurringExpenseOccurrenceStatus = "PENDING" | "PAID" | "OVERDUE" | "GENERATED";
+export type RecurringExpenseOccurrenceStatus = "PENDING" | "PAID" | "OVERDUE" | "GENERATED" | "CANCELLED";
 export type RecurringExpenseFrequency = "monthly" | "quarterly" | "semiannual" | "yearly";
 
 export interface RecurringOccurrenceDateInput {
@@ -59,6 +59,7 @@ export function listRecurringDueDates(input: RecurringOccurrenceDateInput, range
   const from = parseISO(range.from);
   const to = parseISO(range.to);
   const endDate = input.endDate ? parseISO(input.endDate) : null;
+  const anchorDay = input.mode === "PAYABLE" ? input.payableDayOfMonth ?? 1 : parseISO(input.startDate).getDate();
   let cursor =
     input.mode === "PAYABLE"
       ? normalizePayableStartDate(parseISO(input.startDate), input.payableDayOfMonth ?? 1, input.frequency)
@@ -71,10 +72,7 @@ export function listRecurringDueDates(input: RecurringOccurrenceDateInput, range
       result.push(format(cursor, "yyyy-MM-dd"));
     }
 
-    cursor =
-      input.mode === "PAYABLE"
-        ? clampToMonthDay(addByFrequency(cursor, input.frequency), input.payableDayOfMonth ?? 1)
-        : addByFrequency(cursor, input.frequency);
+    cursor = clampToMonthDay(addByFrequency(cursor, input.frequency), anchorDay);
   }
 
   return result;

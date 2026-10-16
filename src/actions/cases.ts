@@ -9,11 +9,11 @@ import { filterCasesByFilters, getCasePendingBalance, summarizeCaseFinance } fro
 import { summarizeSignatureRequests } from "@/lib/signature-summaries";
 import { createClient } from "@/lib/supabase/server";
 import { deriveChargeStatus } from "@/lib/utils";
-import { logActivity } from "./activity-log";
+import { logActivity } from "@/lib/activity-log";
 
 const CaseSchema = z
   .object({
-    clientId: z.string().trim().min(1, "Selecciona un cliente"),
+    clientId: z.string().trim().uuid("Selecciona un cliente valido"),
     title: z.string().trim().min(1, "El titulo es obligatorio"),
     description: z.string().optional(),
     status: z.enum(["ACTIVE", "CLOSED", "SUSPENDED"]).default("ACTIVE"),
@@ -60,15 +60,16 @@ export async function getCases(filters?: { query?: string; status?: string; char
     with: {
       client: true,
       charges: {
+        where: (charge, { eq }) => eq(charge.userId, userId),
         with: {
-          payments: true,
+          payments: { where: (payment, { eq }) => eq(payment.userId, userId) },
         },
       },
     },
     orderBy: (item, { desc }) => [desc(item.updatedAt)],
   });
 
-  const enriched = rows.map((currentCase) => {
+  const enriched = rows.filter(currentCase => currentCase.client.userId === userId).map((currentCase) => {
     const financeSummary = summarizeCaseFinance(currentCase.charges);
     const pendingBalance = getCasePendingBalance(
       currentCase.fee,
@@ -95,20 +96,23 @@ export async function getCase(id: string) {
     with: {
       client: true,
       charges: {
+        where: (charge, { eq }) => eq(charge.userId, userId),
         with: {
           payments: {
+            where: (payment, { eq }) => eq(payment.userId, userId),
             orderBy: (payment, { desc }) => [desc(payment.paymentDate), desc(payment.createdAt)],
           },
         },
         orderBy: (charge, { asc }) => [asc(charge.dueDate), asc(charge.createdAt)],
       },
       reminders: {
+        where: (reminder, { eq }) => eq(reminder.userId, userId),
         orderBy: (reminder, { asc }) => [asc(reminder.reminderDate)],
       },
     },
   });
 
-  if (!currentCase) return null;
+  if (!currentCase || currentCase.client.userId !== userId) return null;
 
   const signatureRows = await db.query.signatureRequests.findMany({
     where: (item, { and: andOperator, eq: eqOperator }) =>
@@ -187,6 +191,11 @@ export async function createCase(formData: FormData) {
   const parsed = CaseSchema.safeParse(raw);
   if (!parsed.success) return { error: parsed.error.errors[0].message };
 
+  const client = await db.query.clients.findFirst({
+    where: (item, { and, eq }) => and(eq(item.id, parsed.data.clientId), eq(item.userId, userId)),
+  });
+  if (!client) return { error: "Cliente no encontrado" };
+
   const [inserted] = await db
     .insert(cases)
     .values({ ...toCaseValues(parsed.data, parsed.data.clientId), userId })
@@ -210,6 +219,11 @@ export async function updateCase(id: string, formData: FormData) {
   const raw = Object.fromEntries(formData.entries());
   const parsed = CaseSchema.safeParse(raw);
   if (!parsed.success) return { error: parsed.error.errors[0].message };
+
+  const client = await db.query.clients.findFirst({
+    where: (item, { and, eq }) => and(eq(item.id, parsed.data.clientId), eq(item.userId, userId)),
+  });
+  if (!client) return { error: "Cliente no encontrado" };
 
   const existing = await db.query.cases.findFirst({
     where: (item, { and: andOperator, eq: eqOperator }) =>

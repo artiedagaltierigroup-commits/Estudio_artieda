@@ -2,7 +2,8 @@ import { createHash } from "crypto";
 import { db } from "@/db";
 import { signatureEvents, signatureRecipients, signatureRequests } from "@/db/schema";
 import { getAggregateSignatureStatus } from "@/lib/signature-recipients";
-import { eq } from "drizzle-orm";
+import { withSignatureRequestLock } from "@/lib/signature-transaction";
+import { and, eq, gt } from "drizzle-orm";
 
 const transparentPng = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=",
@@ -11,21 +12,6 @@ const transparentPng = Buffer.from(
 
 function hashToken(token: string) {
   return createHash("sha256").update(token).digest("hex");
-}
-
-function canMarkEmailOpened(status: string) {
-  return !["SIGNED", "REJECTED", "EXPIRED", "CANCELLED"].includes(status);
-}
-
-async function updateRequestAggregateStatus(requestId: string) {
-  const recipients = await db.query.signatureRecipients.findMany({
-    where: (recipient, { eq: eqOperator }) => eqOperator(recipient.signatureRequestId, requestId),
-  });
-
-  await db
-    .update(signatureRequests)
-    .set({ status: getAggregateSignatureStatus(recipients), updatedAt: new Date() })
-    .where(eq(signatureRequests.id, requestId));
 }
 
 export async function GET(_request: Request, { params }: { params: Promise<{ token: string }> }) {
@@ -37,20 +23,24 @@ export async function GET(_request: Request, { params }: { params: Promise<{ tok
     },
   });
 
-  if (recipient && canMarkEmailOpened(recipient.status) && canMarkEmailOpened(recipient.request.status)) {
-    await db.insert(signatureEvents).values({
-      userId: recipient.userId,
-      signatureRequestId: recipient.signatureRequestId,
-      signatureRecipientId: recipient.id,
-      type: "email_opened",
+  if (recipient) {
+    await withSignatureRequestLock(recipient.signatureRequestId, async (tx) => {
+      const currentRequest = await tx.query.signatureRequests.findFirst({ where: eq(signatureRequests.id, recipient.signatureRequestId) });
+      if (!currentRequest || ["SIGNED", "REJECTED", "EXPIRED", "CANCELLED"].includes(currentRequest.status)) return;
+      const now = new Date();
+      const changed = await tx.update(signatureRecipients).set({ status: "EMAIL_OPENED", updatedAt: now }).where(and(
+        eq(signatureRecipients.id, recipient.id), eq(signatureRecipients.tokenHash, hashToken(token)),
+        eq(signatureRecipients.userId, currentRequest.userId), eq(signatureRecipients.status, "SENT"),
+        gt(signatureRecipients.tokenExpiresAt, now),
+      )).returning({ id: signatureRecipients.id });
+      if (!changed.length) return;
+      await tx.insert(signatureEvents).values({
+        userId: currentRequest.userId, signatureRequestId: recipient.signatureRequestId,
+        signatureRecipientId: recipient.id, type: "email_opened",
+      });
+      const recipients = await tx.query.signatureRecipients.findMany({ where: eq(signatureRecipients.signatureRequestId, recipient.signatureRequestId) });
+      await tx.update(signatureRequests).set({ status: getAggregateSignatureStatus(recipients), updatedAt: now }).where(eq(signatureRequests.id, recipient.signatureRequestId));
     });
-
-    await db
-      .update(signatureRecipients)
-      .set({ status: "EMAIL_OPENED", updatedAt: new Date() })
-      .where(eq(signatureRecipients.id, recipient.id));
-
-    await updateRequestAggregateStatus(recipient.signatureRequestId);
   }
 
   return new Response(transparentPng, {

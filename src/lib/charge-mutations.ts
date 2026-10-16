@@ -1,3 +1,5 @@
+import { getBusinessDate } from "./business-date";
+
 export function buildInitialChargePayment(input: {
   markAsPaid?: boolean;
   amountTotal: string;
@@ -6,6 +8,6 @@ export function buildInitialChargePayment(input: {
 
   return {
     amount: input.amountTotal,
-    paymentDate: new Date().toISOString().slice(0, 10),
+    paymentDate: getBusinessDate(),
   };
 }

@@ -1,26 +1,28 @@
 "use server";
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, gte, lte } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db } from "@/db";
-import { recurringExpenses } from "@/db/schema";
+import { recurringExpenseOccurrences, recurringExpenses } from "@/db/schema";
 import { resolveExistingRecurringStartDate } from "@/lib/recurring-expense-normalizers";
 import { calculateMonthlyProjection } from "@/lib/recurring-expense-projection";
+import { listRecurringDueDates } from "@/lib/recurring-expense-occurrences";
 import { createClient } from "@/lib/supabase/server";
+import { ChargeMoneySchema, OptionalChargeDateSchema } from "@/lib/charge-money";
 import { syncRecurringExpenseOccurrences } from "./recurring-expense-occurrences";
 
 const RecurringExpenseSchema = z
   .object({
     description: z.string().trim().min(1, "La descripcion es obligatoria"),
-    amount: z.string().min(1, "El monto es obligatorio"),
+    amount: ChargeMoneySchema,
     type: z.enum(["OPERATIVE", "TAX", "SERVICE", "OTHER"]).default("OPERATIVE"),
     mode: z.enum(["AUTOMATIC", "PAYABLE"]).default("PAYABLE"),
     priority: z.enum(["LOW", "MEDIUM", "HIGH"]).default("MEDIUM"),
     category: z.string().optional(),
     frequency: z.enum(["monthly", "quarterly", "semiannual", "yearly"]).default("monthly"),
-    startDate: z.string().optional(),
-    endDate: z.string().optional(),
+    startDate: OptionalChargeDateSchema,
+    endDate: OptionalChargeDateSchema,
     notifyDaysBefore: z.string().optional(),
     payableDayOfMonth: z.string().optional(),
     active: z.string().optional(),
@@ -93,7 +95,7 @@ async function getUserId(): Promise<string> {
 
 export async function getRecurringExpenses() {
   const userId = await getUserId();
-  await syncRecurringExpenseOccurrences(new Date());
+  await syncRecurringExpenseOccurrences();
   return db.query.recurringExpenses.findMany({
     where: (expense, { eq: eqOperator }) => eqOperator(expense.userId, userId),
     orderBy: (expense, { asc }) => [asc(expense.description)],
@@ -102,7 +104,7 @@ export async function getRecurringExpenses() {
 
 export async function getRecurringExpense(id: string) {
   const userId = await getUserId();
-  await syncRecurringExpenseOccurrences(new Date());
+  await syncRecurringExpenseOccurrences();
   return db.query.recurringExpenses.findFirst({
     where: (expense, { and: andOperator, eq: eqOperator }) =>
       andOperator(eqOperator(expense.id, id), eqOperator(expense.userId, userId)),
@@ -158,11 +160,17 @@ export async function updateRecurringExpense(id: string, formData: FormData) {
 
 export async function deleteRecurringExpense(id: string) {
   const userId = await getUserId();
-  await db
-    .delete(recurringExpenses)
-    .where(and(eq(recurringExpenses.id, id), eq(recurringExpenses.userId, userId)));
+  const result = await db.transaction(async (tx) => {
+    const [row] = await tx.select().from(recurringExpenses).where(and(eq(recurringExpenses.id, id), eq(recurringExpenses.userId, userId))).for("update");
+    if (!row) return { error: "Gasto recurrente no encontrado" };
+    const history = await tx.query.recurringExpenseOccurrences.findFirst({ where: eq(recurringExpenseOccurrences.recurringExpenseId, id) });
+    if (history) return { error: "Este recurrente tiene historial. Desactivalo para detener nuevos vencimientos sin borrar su historia" };
+    await tx.delete(recurringExpenses).where(and(eq(recurringExpenses.id, id), eq(recurringExpenses.userId, userId)));
+    return { success: true };
+  });
+  if ("error" in result) return result;
   revalidatePath("/gastos/recurrentes");
-  return { success: true };
+  return result;
 }
 
 export async function getMonthlyProjection(targetMonth: Date): Promise<number> {
@@ -173,4 +181,16 @@ export async function getMonthlyProjection(targetMonth: Date): Promise<number> {
   });
 
   return calculateMonthlyProjection(allRecurring, targetMonth);
+}
+
+export async function getPendingRecurringProjection(from: string, to: string): Promise<number> {
+  const userId = await getUserId();
+  const [rows, occurrences] = await Promise.all([
+    db.query.recurringExpenses.findMany({ where: and(eq(recurringExpenses.userId, userId), eq(recurringExpenses.active, true), eq(recurringExpenses.mode, "AUTOMATIC")) }),
+    db.query.recurringExpenseOccurrences.findMany({ where: and(eq(recurringExpenseOccurrences.userId, userId), gte(recurringExpenseOccurrences.dueDate, `${from.slice(0, 7)}-01`), lte(recurringExpenseOccurrences.dueDate, to)) }),
+  ]);
+  const realizedPeriods = new Set(occurrences.filter((item) => item.expenseId || item.status === "CANCELLED" || item.status === "GENERATED" || item.status === "PAID")
+    .map((item) => `${item.recurringExpenseId}:${item.dueDate.slice(0, 7)}`));
+  return rows.reduce((total, recurring) => total + listRecurringDueDates(recurring, { from, to })
+    .filter((date) => !realizedPeriods.has(`${recurring.id}:${date.slice(0, 7)}`)).length * Number(recurring.amount), 0);
 }

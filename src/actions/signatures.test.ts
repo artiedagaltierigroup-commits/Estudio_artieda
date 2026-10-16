@@ -176,4 +176,12 @@ describe("signature action helpers", () => {
       expect.objectContaining({ email: "luis@mail.com", token: "token-1", tokenHash: "hash:token-1", tokenExpiresAt: expiresAt }),
     ]);
   });
+  it.each([
+    { pageNumber: 0, x: .1, y: .1, width: .2, height: .1 },
+    { pageNumber: 1, x: Number.NaN, y: .1, width: .2, height: .1 },
+    { pageNumber: 1, x: .9, y: .1, width: .2, height: .1 },
+  ])("rejects invalid or off-page placement %# before saving a draft", (placement) => {
+    const result = validateSignatureRecipients([{ firstName: "Test", lastName: "", fullName: "Test", email: "test@example.invalid", clientId: null, taxId: null, placements: [placement] }]);
+    expect(result.success).toBe(false);
+  });
 });

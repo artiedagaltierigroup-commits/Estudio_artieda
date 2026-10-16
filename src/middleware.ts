@@ -10,6 +10,7 @@ type CookieToSet = {
 };
 
 export async function middleware(request: NextRequest) {
+  if (isPublicRoutePath(request.nextUrl.pathname)) return NextResponse.next({ request });
   let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient(

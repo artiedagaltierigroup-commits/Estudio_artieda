@@ -85,6 +85,20 @@
       "when": 1781793379700,
       "tag": "0011_signature_final_copy_delivery",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1792109538073,
+      "tag": "0012_secure_exposed_tables",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1792114411355,
+      "tag": "0013_cancel_recurring_occurrences",
+      "breakpoints": true
     }
   ]
 }

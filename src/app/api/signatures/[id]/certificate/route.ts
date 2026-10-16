@@ -75,7 +75,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   });
   if (upload.error) return jsonError("No se pudo generar la constancia", 409);
 
-  const response = await downloadStorageObject(certificatePath, "application/pdf", "constancia-firma.pdf");
+  const response = await downloadStorageObject(certificatePath, "application/pdf", "constancia-firma.pdf", { userId, requestId: request.id });
   if (response.status >= 400) return response;
 
   await logSignatureArtifactDownload({

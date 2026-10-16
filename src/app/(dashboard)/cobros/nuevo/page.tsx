@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { getCases } from "@/actions/cases";
 import { createCharge } from "@/actions/charges";
 import { EmptyState } from "@/components/system/empty-state";
@@ -6,12 +7,10 @@ import { Button } from "@/components/ui/button";
 import { ChargeForm } from "@/components/charges/charge-form";
 import { ArrowLeft, Briefcase, CreditCard } from "lucide-react";
 import Link from "next/link";
-import { redirect } from "next/navigation";
 
 async function handleCreate(formData: FormData) {
   "use server";
-  const result = await createCharge(formData);
-  if (result.success) redirect(`/cobros/${result.chargeId}`);
+  return createCharge(formData);
 }
 
 export default async function NuevoCobroPage({
@@ -59,6 +58,7 @@ export default async function NuevoCobroPage({
       ) : (
         <ChargeForm
           action={handleCreate}
+          creationId={randomUUID()}
           cancelHref="/cobros"
           submitLabel="Guardar cobro"
           cases={cases}

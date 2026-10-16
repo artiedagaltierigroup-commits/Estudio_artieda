@@ -14,6 +14,13 @@ async function createBlankPdf() {
 }
 
 describe("signature pdf placement", () => {
+  it("rejects a placement on a nonexistent page instead of silently signing another page", async () => {
+    await expect(embedRecipientSignaturesInPdf({
+      originalPdfBytes: await createBlankPdf(),
+      recipients: [{ signerName: "Test", signedAt: new Date(), signaturePngBytes: tinyPng,
+        placements: [{ pageNumber: 2, x: .1, y: .1, width: .2, height: .1 }] }],
+    })).rejects.toThrow();
+  });
   it("converts normalized placement into PDF points", () => {
     expect(
       toPdfPlacement({

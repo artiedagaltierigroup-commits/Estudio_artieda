@@ -1,13 +1,23 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   buildEmailText,
   buildFinalCopyUrl,
   buildRecipientSignatureEmail,
   buildSignedDocumentCopyEmail,
   buildSigningUrl,
+  sendSignatureRequestEmail,
 } from "./signature-email";
 
+afterEach(() => { vi.unstubAllEnvs(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
+
 describe("signature email", () => {
+  it("fails closed without credentials and never logs the recipient or access token", async () => {
+    vi.stubEnv("RESEND_API_KEY", ""); vi.stubEnv("SIGNATURE_EMAIL_FROM", "");
+    const info = vi.spyOn(console, "info").mockImplementation(() => undefined);
+    const fetchMock = vi.fn(); vi.stubGlobal("fetch", fetchMock);
+    await expect(sendSignatureRequestEmail({ to: "private@example.invalid", subject: "Private", signingUrl: "https://example.invalid/secret-token" })).rejects.toThrow("configurado");
+    expect(info).not.toHaveBeenCalled(); expect(fetchMock).not.toHaveBeenCalled();
+  });
   it("builds signing urls without duplicate slashes", () => {
     expect(buildSigningUrl("token-1", "https://app.test/")).toBe("https://app.test/firmar/token-1");
   });

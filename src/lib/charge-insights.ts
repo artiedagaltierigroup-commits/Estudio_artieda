@@ -1,4 +1,5 @@
 import { deriveChargeStatus } from "./utils";
+import { moneyToCents } from "./charge-money";
 
 interface ChargePaymentInput {
   amount: string | number;
@@ -37,8 +38,9 @@ function normalize(value?: string | null) {
 }
 
 export function summarizeChargeRecord(charge: ChargeSummaryInput) {
-  const amountPaid = charge.payments.reduce((sum, payment) => sum + Number(payment.amount), 0);
-  const balance = Math.max(0, Number(charge.amountTotal) - amountPaid);
+  const paidCents = charge.payments.reduce((sum, payment) => sum + moneyToCents(payment.amount), 0);
+  const amountPaid = paidCents / 100;
+  const balance = Math.max(0, moneyToCents(charge.amountTotal) - paidCents) / 100;
   const derivedStatus = deriveChargeStatus(
     String(charge.amountTotal),
     amountPaid.toFixed(2),

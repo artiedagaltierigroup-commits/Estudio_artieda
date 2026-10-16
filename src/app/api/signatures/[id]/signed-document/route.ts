@@ -18,7 +18,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   const response = await downloadStorageObject(
     request.document.signedStoragePath,
     "application/pdf",
-    `firmado-${request.document.originalFileName}`
+    `firmado-${request.document.originalFileName}`,
+    { userId, requestId: request.id },
   );
   if (response.status >= 400) return response;
 

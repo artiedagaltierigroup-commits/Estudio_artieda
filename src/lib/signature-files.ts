@@ -28,9 +28,8 @@ export function buildSignedDocumentRetention(params: {
   signedStoragePath: string;
 }) {
   return {
-    originalStoragePath: params.signedStoragePath,
-    storagePathsToDelete:
-      params.originalStoragePath === params.signedStoragePath ? [] : [params.originalStoragePath],
+    originalStoragePath: params.originalStoragePath,
+    storagePathsToDelete: [] as string[],
   };
 }
 

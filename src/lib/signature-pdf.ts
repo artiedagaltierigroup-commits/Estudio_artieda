@@ -1,5 +1,6 @@
 import { createHash } from "crypto";
 import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
+import { SignaturePlacementSchema } from "./signature-placement-validation";
 
 interface NormalizedPlacement {
   pageWidth: number;
@@ -62,7 +63,10 @@ export async function embedRecipientSignaturesInPdf(params: EmbedRecipientSignat
     const signatureImage = await pdf.embedPng(recipient.signaturePngBytes);
 
     for (const recipientPlacement of recipient.placements) {
-      const pageIndex = Math.max(0, Math.min(recipientPlacement.pageNumber - 1, pages.length - 1));
+      if (!SignaturePlacementSchema.safeParse(recipientPlacement).success || recipientPlacement.pageNumber > pages.length) {
+        throw new Error("La ubicacion de firma no corresponde a una pagina valida del documento");
+      }
+      const pageIndex = recipientPlacement.pageNumber - 1;
       const page = pages[pageIndex];
       const pageSize = page.getSize();
       const placement = toPdfPlacement({

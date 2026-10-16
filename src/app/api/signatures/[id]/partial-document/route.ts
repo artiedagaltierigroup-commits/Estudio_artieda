@@ -1,6 +1,7 @@
 import { embedRecipientSignaturesInPdf } from "@/lib/signature-pdf";
 import { SIGNATURE_BUCKET } from "@/lib/signature-files";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { isSignatureStoragePath } from "@/lib/signature-storage-scope";
 import {
   getAuthenticatedSignatureRequest,
   jsonError,
@@ -28,6 +29,11 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     (recipient) => recipient.status === "SIGNED" && recipient.signatureStoragePath && recipient.placements.length > 0
   );
   if (signedRecipients.length === 0) return jsonError("Todavia no hay firmas para insertar", 409);
+  const scope = { userId, requestId: request.id };
+  if (!isSignatureStoragePath(request.document.originalStoragePath, scope) ||
+      signedRecipients.some((recipient) => !isSignatureStoragePath(recipient.signatureStoragePath, scope))) {
+    return jsonError("Archivo no disponible", 404);
+  }
 
   const supabase = createSupabaseAdminClient();
   const { data: originalPdfData, error: originalPdfError } = await supabase.storage

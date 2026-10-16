@@ -83,6 +83,11 @@ export default async function FirmaDetallePage({ params }: { params: Promise<{ i
           certificateAvailable={Boolean(request.document?.signedSha256)}
           signedRecipientCount={signedRecipientCount}
         />
+        {request.status === "SIGNED" && request.sendSignedCopyToRecipients && !request.signedCopySentAt ? (
+          <p role="status" className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
+            La copia por correo sigue pendiente. El PDF firmado esta guardado y podes descargarlo para compartirlo.
+          </p>
+        ) : null}
       </SectionCard>
 
       <SectionCard

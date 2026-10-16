@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { MAX_SIGNATURE_RECIPIENTS } from "../lib/signature-recipients";
+import { SignaturePlacementSchema } from "../lib/signature-placement-validation";
 
 const EmailSchema = z.string().email();
 const RecipientFieldPattern = /^recipients\[(\d+)\]\.(firstName|lastName|email|taxId|clientId)$/;
@@ -120,6 +121,9 @@ export function validateSignatureRecipients(recipients: SignatureRecipientFormVa
 
     if (recipient.placements.length === 0) {
       return { success: false as const, error: "Cada destinatario necesita al menos un espacio de firma" };
+    }
+    if (recipient.placements.some((placement) => !SignaturePlacementSchema.safeParse(placement).success)) {
+      return { success: false as const, error: "Una ubicacion de firma no es valida o queda fuera de la pagina" };
     }
   }
 

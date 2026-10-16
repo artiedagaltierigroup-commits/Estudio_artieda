@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { getCharge, updateDueDate, cancelCharge } from "@/actions/charges";
 import { createPayment, deletePayment } from "@/actions/payments";
 import { PaymentForm } from "@/components/charges/payment-form";
@@ -33,7 +34,7 @@ export default async function CobroDetailPage({ params }: { params: Promise<{ id
 
   async function handlePayment(formData: FormData) {
     "use server";
-    await createPayment(formData);
+    return createPayment(formData);
   }
 
   async function handleReschedule(formData: FormData) {
@@ -161,7 +162,7 @@ export default async function CobroDetailPage({ params }: { params: Promise<{ id
                 : "Este cobro ya esta completamente pagado."}
             </div>
           ) : (
-            <PaymentForm action={handlePayment} chargeId={charge.id} remainingBalance={charge.balance} />
+            <PaymentForm action={handlePayment} chargeId={charge.id} paymentId={randomUUID()} remainingBalance={charge.balance} />
           )}
         </SectionCard>
       </div>

@@ -3,6 +3,7 @@ import { db } from "@/db";
 import { signatureEvents } from "@/db/schema";
 import { SIGNATURE_BUCKET } from "@/lib/signature-files";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { isOwnedSignatureRequestGraph, isSignatureStoragePath } from "@/lib/signature-storage-scope";
 
 function hashToken(token: string) {
   return createHash("sha256").update(token).digest("hex");
@@ -31,7 +32,8 @@ export async function GET(
     },
   });
 
-  if (!recipient?.request.sendSignedCopyToRecipients || recipient.request.status !== "SIGNED") {
+  if (!recipient?.request.sendSignedCopyToRecipients || recipient.request.status !== "SIGNED" ||
+      recipient.signatureRequestId !== recipient.request.id || !isOwnedSignatureRequestGraph(recipient.request, recipient.userId)) {
     return new Response("Documento no disponible", { status: 404 });
   }
 
@@ -39,8 +41,12 @@ export async function GET(
     return new Response("Link vencido", { status: 410 });
   }
 
-  const signedStoragePath = recipient.request.document?.signedStoragePath;
-  if (!signedStoragePath) return new Response("Documento no disponible", { status: 404 });
+  const document = recipient.request.document;
+  if (!document) return new Response("Documento no disponible", { status: 404 });
+  const signedStoragePath = document.signedStoragePath;
+  if (!isSignatureStoragePath(signedStoragePath, { userId: recipient.userId, requestId: recipient.request.id })) {
+    return new Response("Documento no disponible", { status: 404 });
+  }
 
   const supabase = createSupabaseAdminClient();
   const { data, error } = await supabase.storage.from(SIGNATURE_BUCKET).download(signedStoragePath);
@@ -57,7 +63,7 @@ export async function GET(
   });
 
   const bytes = Buffer.from(await data.arrayBuffer());
-  const fileName = getDownloadName(recipient.request.document.originalFileName);
+  const fileName = getDownloadName(document.originalFileName);
 
   return new Response(new Uint8Array(bytes), {
     headers: {

@@ -2,6 +2,10 @@ import { describe, expect, it } from "vitest";
 import { filterChargesByFilters, sortChargesByDueDate, summarizeChargeRecord } from "./charge-insights";
 
 describe("summarizeChargeRecord", () => {
+  it("keeps a remaining balance exact to the cent", () => {
+    expect(summarizeChargeRecord({ amountTotal: "0.30", dueDate: null, payments: [{ amount: "0.10" }] }).balance).toBe(0.20);
+    expect(summarizeChargeRecord({ amountTotal: "0.30", dueDate: null, payments: [{ amount: "0.10" }, { amount: "0.20" }] }).amountPaid).toBe(0.30);
+  });
   it("derives amount paid, balance and status from payments and cancellation", () => {
     expect(
       summarizeChargeRecord({

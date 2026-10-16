@@ -1,217 +1,34 @@
 "use server";
 
-import { and, asc, eq, gte, inArray, lte } from "drizzle-orm";
-import { addDays, endOfMonth, format } from "date-fns";
+import { and, asc, eq, gte, lte } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db";
 import { expenses, recurringExpenseOccurrences, recurringExpenses } from "@/db/schema";
-import {
-  buildRecurringPayableChecklist,
-  getRecurringPayableChecklistRange,
-  isRecurringPayableAlertVisible,
-} from "@/lib/recurring-expense-checklist";
-import {
-  getRecurringOccurrenceStatus,
-  listRecurringDueDates,
-  type RecurringExpenseOccurrenceStatus,
-} from "@/lib/recurring-expense-occurrences";
+import { buildRecurringPayableChecklist, getRecurringPayableChecklistRange, isRecurringPayableAlertVisible } from "@/lib/recurring-expense-checklist";
+import { getRecurringOccurrenceStatus, type RecurringExpenseOccurrenceStatus } from "@/lib/recurring-expense-occurrences";
+import { createRecurringExpenseRealization, lockRecurringOccurrence, syncUserRecurringExpenseOccurrences } from "@/lib/recurring-expense-sync";
+import { getBusinessDate } from "@/lib/business-date";
 import { createClient } from "@/lib/supabase/server";
-import { logActivity } from "./activity-log";
-
-type RecurringExpenseRow = typeof recurringExpenses.$inferSelect;
-type RecurringOccurrenceRow = typeof recurringExpenseOccurrences.$inferSelect;
+import { logActivity } from "@/lib/activity-log";
 
 async function getUserId(): Promise<string> {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
+  const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("No autenticado");
   return user.id;
 }
 
-function buildExpenseNote(recurring: RecurringExpenseRow, dueDate: string, modeLabel: string) {
-  const noteParts = [`Generado desde ${modeLabel}.`, `Vencimiento: ${dueDate}.`];
-  if (recurring.notes?.trim()) noteParts.push(recurring.notes.trim());
-  return noteParts.join(" ");
-}
-
-async function createRecurringExpenseRealization(params: {
-  recurring: RecurringExpenseRow;
-  userId: string;
-  date: string;
-  dueDate: string;
-  origin: "RECURRING_AUTOMATIC" | "RECURRING_PAYABLE";
-}) {
-  const [inserted] = await db
-    .insert(expenses)
-    .values({
-      userId: params.userId,
-      description: params.recurring.description,
-      amount: params.recurring.amount,
-      type: params.recurring.type,
-      origin: params.origin,
-      recurringExpenseId: params.recurring.id,
-      category: params.recurring.category,
-      date: params.date,
-      notes: buildExpenseNote(
-        params.recurring,
-        params.dueDate,
-        params.origin === "RECURRING_AUTOMATIC" ? "gasto programado" : "gasto por pagar"
-      ),
-    })
-    .returning();
-
-  await logActivity({
-    userId: params.userId,
-    entityType: "expense",
-    entityId: inserted.id,
-    action: "created",
-    newValue: {
-      description: params.recurring.description,
-      amount: params.recurring.amount,
-      origin: params.origin,
-      recurringExpenseId: params.recurring.id,
-    },
-    note:
-      params.origin === "RECURRING_AUTOMATIC"
-        ? "Gasto real generado automaticamente desde recurrente programado"
-        : "Gasto real generado al marcar pago de recurrente por pagar",
-  });
-
-  return inserted;
-}
-
 function revalidateRecurringSurface() {
-  revalidatePath("/");
-  revalidatePath("/gastos");
-  revalidatePath("/gastos/recurrentes");
-  revalidatePath("/recordatorios");
-  revalidatePath("/calendario");
+  for (const path of ["/", "/gastos", "/gastos/recurrentes", "/recordatorios", "/calendario"]) revalidatePath(path);
 }
 
-async function syncRecurringExpenseOccurrencesForRows(recurringRows: RecurringExpenseRow[], referenceDate: Date) {
-  if (recurringRows.length === 0) return;
-
-  const todayKey = format(referenceDate, "yyyy-MM-dd");
-  const horizonKey = format(endOfMonth(addDays(referenceDate, 15)), "yyyy-MM-dd");
-  const recurringIds = recurringRows.map((item) => item.id);
-
-  const existingRows = await db.query.recurringExpenseOccurrences.findMany({
-    where: (item, { and: andOperator, inArray: inArrayOperator, lte: lteOperator }) =>
-      andOperator(inArrayOperator(item.recurringExpenseId, recurringIds), lteOperator(item.dueDate, horizonKey)),
-  });
-
-  const existingByKey = new Map<string, RecurringOccurrenceRow>(
-    existingRows.map((item) => [`${item.recurringExpenseId}:${item.dueDate}`, item] as const)
-  );
-
-  for (const recurring of recurringRows) {
-    const dueDates = listRecurringDueDates(
-      {
-        active: recurring.active,
-        mode: recurring.mode,
-        frequency: recurring.frequency,
-        startDate: recurring.startDate,
-        endDate: recurring.endDate,
-        payableDayOfMonth: recurring.payableDayOfMonth,
-      },
-      { from: recurring.startDate, to: horizonKey }
-    );
-
-    for (const dueDate of dueDates) {
-      const key = `${recurring.id}:${dueDate}`;
-      const existing = existingByKey.get(key);
-      const derivedStatus = getRecurringOccurrenceStatus({ mode: recurring.mode, dueDate, today: todayKey });
-
-      if (!existing) {
-        if (recurring.mode === "AUTOMATIC" && derivedStatus !== "GENERATED") continue;
-
-        let expenseId: string | null = null;
-        if (recurring.mode === "AUTOMATIC") {
-          const expense = await createRecurringExpenseRealization({
-            recurring,
-            userId: recurring.userId,
-            date: dueDate,
-            dueDate,
-            origin: "RECURRING_AUTOMATIC",
-          });
-          expenseId = expense.id;
-        }
-
-        const [inserted] = await db
-          .insert(recurringExpenseOccurrences)
-          .values({
-            userId: recurring.userId,
-            recurringExpenseId: recurring.id,
-            dueDate,
-            status: recurring.mode === "AUTOMATIC" ? "GENERATED" : derivedStatus,
-            expenseId,
-            paidAt: recurring.mode === "AUTOMATIC" ? new Date(`${dueDate}T12:00:00.000Z`) : null,
-          })
-          .returning();
-
-        existingByKey.set(key, inserted);
-        continue;
-      }
-
-      if (existing.status === "PAID") continue;
-
-      if (recurring.mode === "AUTOMATIC") {
-        if (!existing.expenseId && derivedStatus === "GENERATED") {
-          const expense = await createRecurringExpenseRealization({
-            recurring,
-            userId: recurring.userId,
-            date: dueDate,
-            dueDate,
-            origin: "RECURRING_AUTOMATIC",
-          });
-
-          await db
-            .update(recurringExpenseOccurrences)
-            .set({
-              status: "GENERATED",
-              expenseId: expense.id,
-              paidAt: new Date(`${dueDate}T12:00:00.000Z`),
-              updatedAt: new Date(),
-            })
-            .where(eq(recurringExpenseOccurrences.id, existing.id));
-        }
-
-        continue;
-      }
-
-      if (existing.status !== derivedStatus) {
-        await db
-          .update(recurringExpenseOccurrences)
-          .set({ status: derivedStatus, updatedAt: new Date() })
-          .where(eq(recurringExpenseOccurrences.id, existing.id));
-      }
-    }
-  }
-}
-
-export async function syncRecurringExpenseOccurrences(referenceDate = new Date()) {
+export async function syncRecurringExpenseOccurrences() {
   const userId = await getUserId();
-  const recurringRows = await db.query.recurringExpenses.findMany({
-    where: (item, { and: andOperator, eq: eqOperator }) =>
-      andOperator(eqOperator(item.userId, userId), eqOperator(item.active, true)),
-  });
-
-  await syncRecurringExpenseOccurrencesForRows(recurringRows, referenceDate);
-}
-
-export async function syncAllRecurringExpenseOccurrences(referenceDate = new Date()) {
-  const recurringRows = await db.query.recurringExpenses.findMany({
-    where: (item, { eq: eqOperator }) => eqOperator(item.active, true),
-  });
-
-  await syncRecurringExpenseOccurrencesForRows(recurringRows, referenceDate);
+  await syncUserRecurringExpenseOccurrences(userId);
 }
 
 export async function getRecurringPayableChecklist(referenceDate = new Date()) {
-  await syncRecurringExpenseOccurrences(referenceDate);
+  await syncRecurringExpenseOccurrences();
 
   const userId = await getUserId();
   const checklistRange = getRecurringPayableChecklistRange(referenceDate);
@@ -236,6 +53,7 @@ export async function getRecurringPayableChecklist(referenceDate = new Date()) {
     .where(
       and(
         eq(recurringExpenseOccurrences.userId, userId),
+        eq(recurringExpenses.userId, userId),
         eq(recurringExpenses.mode, "PAYABLE"),
         gte(recurringExpenseOccurrences.dueDate, checklistRange.from),
         lte(recurringExpenseOccurrences.dueDate, checklistRange.to)
@@ -248,7 +66,7 @@ export async function getRecurringPayableChecklist(referenceDate = new Date()) {
 
 export async function getRecurringPayableAlerts(referenceDate = new Date()) {
   const checklist = await getRecurringPayableChecklist(referenceDate);
-  const todayKey = format(referenceDate, "yyyy-MM-dd");
+  const todayKey = getBusinessDate(referenceDate);
 
   return checklist.pending
     .filter((item) => isRecurringPayableAlertVisible(item, todayKey))
@@ -264,138 +82,44 @@ export async function getRecurringPayableAlerts(referenceDate = new Date()) {
 
 export async function markRecurringOccurrencePaid(id: string) {
   const userId = await getUserId();
-  await syncRecurringExpenseOccurrences(new Date());
-
   const result = await db.transaction(async (tx) => {
-    const [row] = await tx
-      .select({
-        occurrence: recurringExpenseOccurrences,
-        recurring: recurringExpenses,
-      })
-      .from(recurringExpenseOccurrences)
-      .innerJoin(recurringExpenses, eq(recurringExpenseOccurrences.recurringExpenseId, recurringExpenses.id))
-      .where(and(eq(recurringExpenseOccurrences.id, id), eq(recurringExpenseOccurrences.userId, userId)))
-      .limit(1)
-      .for("update");
-
-    if (!row) return { error: "Vencimiento recurrente no encontrado" } as const;
-    if (row.recurring.mode !== "PAYABLE") {
-      return { error: "Solo se pueden marcar pagos manuales en gastos por pagar" } as const;
+    const row = await lockRecurringOccurrence(tx, id, userId);
+    if (!row) return { error: "Vencimiento recurrente no encontrado" };
+    if (row.recurring.mode !== "PAYABLE") return { error: "Solo se pueden marcar pagos manuales en gastos por pagar" };
+    if (row.occurrence.status === "PAID") return { success: true };
+    if (row.occurrence.status === "CANCELLED") return { error: "Reabri el vencimiento anulado antes de registrar otro pago" };
+    if (row.occurrence.expenseId || row.occurrence.status === "GENERATED") {
+      return { error: "Este vencimiento ya tiene un gasto registrado. Revisalo antes de registrar otro pago" };
     }
-    if (row.occurrence.status === "PAID") return { success: true, alreadyPaid: true } as const;
-
-    const paymentDate = format(new Date(), "yyyy-MM-dd");
-    const [expense] = await tx
-      .insert(expenses)
-      .values({
-        userId,
-        description: row.recurring.description,
-        amount: row.recurring.amount,
-        type: row.recurring.type,
-        origin: "RECURRING_PAYABLE",
-        recurringExpenseId: row.recurring.id,
-        category: row.recurring.category,
-        date: paymentDate,
-        notes: buildExpenseNote(row.recurring, row.occurrence.dueDate, "gasto por pagar"),
-      })
-      .returning();
-
-    await tx
-      .update(recurringExpenseOccurrences)
-      .set({
-        status: "PAID",
-        expenseId: expense.id,
-        paidAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .where(eq(recurringExpenseOccurrences.id, row.occurrence.id));
-
-    return { success: true, expense, recurring: row.recurring } as const;
+    const expense = await createRecurringExpenseRealization(tx, row.recurring, row.occurrence.dueDate, getBusinessDate());
+    await tx.update(recurringExpenseOccurrences).set({ status: "PAID", expenseId: expense.id, paidAt: new Date(), updatedAt: new Date() }).where(eq(recurringExpenseOccurrences.id, id));
+    return { success: true };
   });
-
   if ("error" in result) return result;
-
-  if (!result.alreadyPaid) {
-    await logActivity({
-      userId,
-      entityType: "expense",
-      entityId: result.expense.id,
-      action: "created",
-      newValue: {
-        description: result.recurring.description,
-        amount: result.recurring.amount,
-        origin: "RECURRING_PAYABLE",
-        recurringExpenseId: result.recurring.id,
-      },
-      note: "Gasto real generado al marcar pago de recurrente por pagar",
-    });
-  }
-
   revalidateRecurringSurface();
-  return { success: true };
+  return result;
 }
 
 export async function reopenRecurringOccurrence(id: string) {
   const userId = await getUserId();
-
-  const [row] = await db
-    .select({
-      occurrence: recurringExpenseOccurrences,
-      recurring: recurringExpenses,
-    })
-    .from(recurringExpenseOccurrences)
-    .innerJoin(recurringExpenses, eq(recurringExpenseOccurrences.recurringExpenseId, recurringExpenses.id))
-    .where(and(eq(recurringExpenseOccurrences.id, id), eq(recurringExpenseOccurrences.userId, userId)))
-    .limit(1);
-
-  if (!row) return { error: "Vencimiento recurrente no encontrado" };
-  if (row.recurring.mode !== "PAYABLE") return { error: "Solo se pueden reabrir gastos por pagar" };
-
-  if (row.occurrence.expenseId) {
-    const existingExpense = await db.query.expenses.findFirst({
-      where: (item, { and: andOperator, eq: eqOperator }) =>
-        andOperator(eqOperator(item.id, row.occurrence.expenseId!), eqOperator(item.userId, userId)),
-    });
-
-    if (existingExpense && !existingExpense.voidedAt) {
-      const voidedAt = new Date();
-      await db
-        .update(expenses)
-        .set({
-          voidedAt,
-          voidReason: "Pago recurrente reabierto desde checklist",
-          updatedAt: voidedAt,
-        })
-        .where(eq(expenses.id, existingExpense.id));
-
-      await logActivity({
-        userId,
-        entityType: "expense",
-        entityId: existingExpense.id,
-        action: "updated",
-        previousValue: { voidedAt: existingExpense.voidedAt, voidReason: existingExpense.voidReason },
-        newValue: { voidedAt, voidReason: "Pago recurrente reabierto desde checklist" },
-        note: "Gasto real anulado al desmarcar gasto por pagar",
-      });
+  const result = await db.transaction(async (tx) => {
+    const row = await lockRecurringOccurrence(tx, id, userId);
+    if (!row) return { error: "Vencimiento recurrente no encontrado" };
+    if (row.recurring.mode !== "PAYABLE") return { error: "Solo se pueden reabrir gastos por pagar" };
+    if (row.occurrence.expenseId) {
+      const [expense] = await tx.select().from(expenses).where(and(eq(expenses.id, row.occurrence.expenseId), eq(expenses.userId, userId))).for("update");
+      if (expense && !expense.voidedAt) {
+        const voidedAt = new Date();
+        const voidReason = "Pago recurrente reabierto desde checklist";
+        await tx.update(expenses).set({ voidedAt, voidReason, updatedAt: voidedAt }).where(eq(expenses.id, expense.id));
+        await logActivity({ userId, entityType: "expense", entityId: expense.id, action: "updated", previousValue: { voidedAt: expense.voidedAt, voidReason: expense.voidReason }, newValue: { voidedAt, voidReason }, note: "Gasto real anulado al desmarcar gasto por pagar" }, tx);
+      }
     }
-  }
-
-  const nextStatus = getRecurringOccurrenceStatus({
-    mode: "PAYABLE",
-    dueDate: row.occurrence.dueDate,
-    today: format(new Date(), "yyyy-MM-dd"),
+    const status = getRecurringOccurrenceStatus({ mode: "PAYABLE", dueDate: row.occurrence.dueDate, today: getBusinessDate() });
+    await tx.update(recurringExpenseOccurrences).set({ status, expenseId: null, paidAt: null, updatedAt: new Date() }).where(eq(recurringExpenseOccurrences.id, id));
+    return { success: true };
   });
-
-  await db
-    .update(recurringExpenseOccurrences)
-    .set({
-      status: nextStatus === "OVERDUE" ? "OVERDUE" : "PENDING",
-      expenseId: null,
-      paidAt: null,
-      updatedAt: new Date(),
-    })
-    .where(eq(recurringExpenseOccurrences.id, row.occurrence.id));
-
+  if ("error" in result) return result;
   revalidateRecurringSurface();
-  return { success: true };
+  return result;
 }

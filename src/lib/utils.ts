@@ -2,6 +2,7 @@ import { clsx, type ClassValue } from "clsx";
 import { format, parseISO } from "date-fns";
 import { es } from "date-fns/locale";
 import { twMerge } from "tailwind-merge";
+import { getBusinessDate } from "./business-date";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -162,7 +163,7 @@ export function deriveChargeStatus(
 
   if (cancelledAt) return "CANCELLED";
   if (balance <= 0) return "PAID";
-  if (dueDate && new Date(dueDate) < new Date()) return "OVERDUE";
+  if (dueDate && dueDate < getBusinessDate()) return "OVERDUE";
   if (paid > 0) return "PARTIAL";
   return "PENDING";
 }

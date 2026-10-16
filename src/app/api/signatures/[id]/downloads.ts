@@ -1,9 +1,10 @@
-import { logActivity } from "@/actions/activity-log";
+import { logActivity } from "@/lib/activity-log";
 import { db } from "@/db";
 import { signatureEvents } from "@/db/schema";
 import { SIGNATURE_BUCKET } from "@/lib/signature-files";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { isOwnedSignatureRequestGraph, isSignatureStoragePath, type SignatureStorageScope } from "@/lib/signature-storage-scope";
 
 type DownloadArtifact = "signed-document" | "signature-image" | "certificate" | "partial-document";
 
@@ -49,11 +50,12 @@ export async function getAuthenticatedSignatureRequest(id: string) {
     },
   });
 
-  if (!request) return { error: jsonError("Solicitud no encontrada", 404) };
+  if (!request || !isOwnedSignatureRequestGraph(request, user.id)) return { error: jsonError("Solicitud no encontrada", 404) };
   return { request, userId: user.id };
 }
 
-export async function downloadStorageObject(path: string, contentType: string, fileName: string) {
+export async function downloadStorageObject(path: string, contentType: string, fileName: string, scope: SignatureStorageScope) {
+  if (!isSignatureStoragePath(path, scope)) return jsonError("Archivo no disponible", 404);
   const supabase = createSupabaseAdminClient();
   const { data, error } = await supabase.storage.from(SIGNATURE_BUCKET).download(path);
 

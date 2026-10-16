@@ -5,7 +5,7 @@ import { PageHeader } from "@/components/system/page-header";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 
 export default async function EditarCobroPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -21,7 +21,7 @@ export default async function EditarCobroPage({ params }: { params: Promise<{ id
   async function handleSubmit(formData: FormData) {
     "use server";
     const result = await updateCharge(id, formData);
-    if (result.success) redirect(`/cobros/${id}`);
+    return result.success ? { ...result, chargeId: id } : result;
   }
 
   return (

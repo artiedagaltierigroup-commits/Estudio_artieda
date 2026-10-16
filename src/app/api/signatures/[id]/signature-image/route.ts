@@ -15,7 +15,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     return jsonError("La imagen de firma todavia no esta disponible", 409);
   }
 
-  const response = await downloadStorageObject(request.document.signatureStoragePath, "image/png", "firma.png");
+  const response = await downloadStorageObject(request.document.signatureStoragePath, "image/png", "firma.png", { userId, requestId: request.id });
   if (response.status >= 400) return response;
 
   await logSignatureArtifactDownload({

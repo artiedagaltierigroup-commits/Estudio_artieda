@@ -45,14 +45,14 @@ export default async function CalendarioPage({
           { label: "Dias activos", value: `${activeDays}` },
         ]}
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex w-full min-w-0 flex-wrap items-center justify-between gap-2 sm:w-auto sm:justify-start">
             <Button asChild variant="outline" size="sm">
               <Link href={`/calendario?month=${previousMonth}`}>
                 <ChevronLeft className="h-4 w-4" />
                 Mes anterior
               </Link>
             </Button>
-            <div className="rounded-full border border-border/70 bg-white px-4 py-2 text-sm font-medium text-foreground">
+            <div className="order-first w-full rounded-full border border-border/70 bg-white px-4 py-2 text-center text-sm font-medium text-foreground sm:order-none sm:w-auto">
               {monthLabel}
             </div>
             <Button asChild variant="outline" size="sm">

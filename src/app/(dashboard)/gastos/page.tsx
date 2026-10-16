@@ -305,6 +305,7 @@ export default async function GastosPage({ searchParams }: GastosPageProps) {
       <RecurringPayablesChecklist
         pending={recurringChecklist.pending}
         paid={recurringChecklist.paid}
+        cancelled={recurringChecklist.cancelled}
         onMarkPaid={handleMarkPaid}
         onReopen={handleReopen}
       />

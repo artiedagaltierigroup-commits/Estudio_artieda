@@ -4,17 +4,18 @@ import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db } from "@/db";
-import { expenses } from "@/db/schema";
+import { expenses, recurringExpenses, recurringExpenseOccurrences } from "@/db/schema";
 import { filterExpensesByFilters } from "@/lib/expense-insights";
 import { createClient } from "@/lib/supabase/server";
-import { logActivity } from "./activity-log";
+import { logActivity } from "@/lib/activity-log";
+import { ChargeDateSchema, ChargeMoneySchema } from "@/lib/charge-money";
 
 const ExpenseSchema = z.object({
   description: z.string().trim().min(1, "La descripcion es obligatoria"),
-  amount: z.string().min(1, "El monto es obligatorio"),
+  amount: ChargeMoneySchema,
   type: z.enum(["OPERATIVE", "TAX", "SERVICE", "OTHER"]).default("OPERATIVE"),
   category: z.string().optional(),
-  date: z.string().min(1, "La fecha es obligatoria"),
+  date: ChargeDateSchema,
   receiptUrl: z.string().optional(),
   notes: z.string().optional(),
 });
@@ -121,46 +122,31 @@ export async function updateExpense(id: string, formData: FormData) {
 
 export async function voidExpense(id: string, reason?: string) {
   const userId = await getUserId();
-  const existing = await db.query.expenses.findFirst({
-    where: (item, { and: andOperator, eq: eqOperator }) =>
-      andOperator(eqOperator(item.id, id), eqOperator(item.userId, userId)),
+  const result = await db.transaction(async (tx) => {
+    const initial = await tx.query.expenses.findFirst({ where: and(eq(expenses.id, id), eq(expenses.userId, userId)) });
+    if (!initial) return { error: "Gasto no encontrado" };
+    if (initial.origin === "SAVINGS") return { error: "Los gastos de ahorro se gestionan desde Ahorros" };
+    // Use the same lock order as generation, payment and reopening.
+    if (initial.recurringExpenseId) {
+      await tx.select().from(recurringExpenses).where(and(eq(recurringExpenses.id, initial.recurringExpenseId), eq(recurringExpenses.userId, userId))).for("update");
+    }
+    const linked = await tx.select().from(recurringExpenseOccurrences).where(and(eq(recurringExpenseOccurrences.expenseId, id), eq(recurringExpenseOccurrences.userId, userId))).for("update");
+    const [existing] = await tx.select().from(expenses).where(and(eq(expenses.id, id), eq(expenses.userId, userId))).for("update");
+    if (!existing) return { error: "Gasto no encontrado" };
+    if (existing.voidedAt) return { error: "El gasto ya esta anulado" };
+    const voidedAt = new Date();
+    const voidReason = reason?.trim() || null;
+    await tx.update(expenses).set({ voidedAt, voidReason, updatedAt: voidedAt }).where(eq(expenses.id, id));
+    for (const occurrence of linked) {
+      await tx.update(recurringExpenseOccurrences).set({ status: "CANCELLED", paidAt: null, updatedAt: voidedAt }).where(eq(recurringExpenseOccurrences.id, occurrence.id));
+    }
+    await logActivity({ userId, entityType: "expense", entityId: id, action: "updated", previousValue: { voidedAt: existing.voidedAt, voidReason: existing.voidReason }, newValue: { voidedAt, voidReason }, note: "Gasto anulado" }, tx);
+    return { success: true };
   });
-  if (!existing) return { error: "Gasto no encontrado" };
-  if (existing.voidedAt) return { error: "El gasto ya esta anulado" };
-  if (existing.origin === "SAVINGS") return { error: "Los gastos de ahorro se gestionan desde Ahorros" };
-
-  const voidedAt = new Date();
-
-  await db
-    .update(expenses)
-    .set({
-      voidedAt,
-      voidReason: reason?.trim() || null,
-      updatedAt: voidedAt,
-    })
-    .where(and(eq(expenses.id, id), eq(expenses.userId, userId)));
-
-  await logActivity({
-    userId,
-    entityType: "expense",
-    entityId: id,
-    action: "updated",
-    previousValue: {
-      voidedAt: existing.voidedAt,
-      voidReason: existing.voidReason,
-    },
-    newValue: {
-      voidedAt,
-      voidReason: reason?.trim() || null,
-    },
-    note: "Gasto anulado",
-  });
-
-  revalidatePath("/gastos");
-  revalidatePath(`/gastos/${id}`);
-  return { success: true };
+  if ("error" in result) return result;
+  for (const path of ["/", "/gastos", `/gastos/${id}`, "/gastos/recurrentes", "/recordatorios", "/calendario"]) revalidatePath(path);
+  return result;
 }
-
 export async function deleteExpense(id: string) {
   const userId = await getUserId();
   const existing = await db.query.expenses.findFirst({
@@ -169,6 +155,8 @@ export async function deleteExpense(id: string) {
   });
   if (!existing) return { error: "Gasto no encontrado" };
   if (existing.origin === "SAVINGS") return { error: "Los gastos de ahorro se gestionan desde Ahorros" };
+
+  if (existing.origin === "RECURRING_AUTOMATIC" || existing.origin === "RECURRING_PAYABLE") return { error: "Los gastos recurrentes conservan su historia; usa Anular" };
 
   await db.delete(expenses).where(and(eq(expenses.id, id), eq(expenses.userId, userId)));
 

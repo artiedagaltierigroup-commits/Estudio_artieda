@@ -27,6 +27,7 @@ export const recurringExpenseOccurrenceStatusEnum = pgEnum("recurring_expense_oc
   "PAID",
   "OVERDUE",
   "GENERATED",
+  "CANCELLED",
 ]);
 export const expenseOriginEnum = pgEnum("expense_origin", ["MANUAL", "RECURRING_AUTOMATIC", "RECURRING_PAYABLE", "SAVINGS"]);
 export const savingsGoalStatusEnum = pgEnum("savings_goal_status", ["IN_PROGRESS", "PAUSED"]);

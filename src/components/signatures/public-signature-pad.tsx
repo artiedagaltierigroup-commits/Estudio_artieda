@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import SignaturePad from "signature_pad";
 import { Check, Eraser, PenLine } from "lucide-react";
 import { useEffect, useRef, useState, useTransition } from "react";
+import { getSignatureCanvasScale } from "@/lib/signature-limits";
 
 interface PublicSignaturePadProps {
   token: string;
@@ -16,6 +17,7 @@ export function PublicSignaturePad({ token }: PublicSignaturePadProps) {
   const [signatureDataUrl, setSignatureDataUrl] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [warning, setWarning] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   useEffect(() => {
@@ -24,8 +26,8 @@ export function PublicSignaturePad({ token }: PublicSignaturePadProps) {
 
     function resizeCanvas() {
       if (!canvas) return;
-      const ratio = Math.max(window.devicePixelRatio || 1, 1);
       const rect = canvas.getBoundingClientRect();
+      const ratio = getSignatureCanvasScale(rect.width, rect.height, window.devicePixelRatio);
       canvas.width = rect.width * ratio;
       canvas.height = rect.height * ratio;
       canvas.getContext("2d")?.scale(ratio, ratio);
@@ -72,6 +74,7 @@ export function PublicSignaturePad({ token }: PublicSignaturePadProps) {
         setError(result.error);
         return;
       }
+      setWarning(result && "warning" in result ? result.warning ?? null : null);
       setSuccess(true);
     });
   }
@@ -84,6 +87,7 @@ export function PublicSignaturePad({ token }: PublicSignaturePadProps) {
         </div>
         <h2 className="text-lg font-semibold text-foreground">Gracias, firma enviada</h2>
         <p className="mt-2 text-sm leading-6 text-muted-foreground">Ya podes cerrar esta ventana.</p>
+        {warning ? <p className="mt-3 text-sm leading-6 text-amber-900">{warning}</p> : null}
       </div>
     );
   }

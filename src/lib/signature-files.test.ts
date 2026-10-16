@@ -18,15 +18,15 @@ describe("signature file utilities", () => {
     expect(hash).toBe("758a7f95bd78e0e85898016c65deaa9313209f62d3887ee0a23ac54d13b6d873");
   });
 
-  it("replaces the original PDF with the signed PDF after signing", () => {
+  it("preserves the exact original PDF for verification and safe retries after signing", () => {
     expect(
       buildSignedDocumentRetention({
         originalStoragePath: "user-1/signature-requests/request-1/original/contrato.pdf",
         signedStoragePath: "user-1/signature-requests/request-1/signed/firmado-contrato.pdf",
       })
     ).toEqual({
-      originalStoragePath: "user-1/signature-requests/request-1/signed/firmado-contrato.pdf",
-      storagePathsToDelete: ["user-1/signature-requests/request-1/original/contrato.pdf"],
+      originalStoragePath: "user-1/signature-requests/request-1/original/contrato.pdf",
+      storagePathsToDelete: [],
     });
   });
 });

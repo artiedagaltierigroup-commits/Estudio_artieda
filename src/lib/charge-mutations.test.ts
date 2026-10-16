@@ -1,7 +1,17 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { buildInitialChargePayment } from "./charge-mutations";
+import { getBusinessDate } from "./business-date";
 
 describe("buildInitialChargePayment", () => {
+  it("uses Argentina's calendar date after UTC midnight", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-16T01:30:00Z"));
+    try {
+      expect(buildInitialChargePayment({ markAsPaid: true, amountTotal: "10" })?.paymentDate).toBe("2026-10-15");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
   it("creates a full payment for today when markAsPaid is enabled", () => {
     const payment = buildInitialChargePayment({
       markAsPaid: true,
@@ -10,7 +20,7 @@ describe("buildInitialChargePayment", () => {
 
     expect(payment).toEqual({
       amount: "2500",
-      paymentDate: new Date().toISOString().slice(0, 10),
+      paymentDate: getBusinessDate(),
     });
   });
 

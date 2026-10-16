@@ -9,12 +9,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [rememberMe, setRememberMe] = useState(true);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   const supabase = createClient();
@@ -32,10 +30,6 @@ export default function LoginPage() {
       toast.error("Credenciales incorrectas. Verifica tu email y contrasena.");
       setLoading(false);
       return;
-    }
-
-    if (!rememberMe) {
-      toast.message("La sesion quedara disponible en este dispositivo hasta cerrar manualmente.");
     }
 
     router.push("/");
@@ -101,17 +95,9 @@ export default function LoginPage() {
                     />
                   </div>
 
-                  <div className="flex items-center justify-between gap-3">
-                    <label className="flex items-center gap-3 text-sm text-muted-foreground">
-                      <Checkbox
-                        checked={rememberMe}
-                        onCheckedChange={(checked) => setRememberMe(Boolean(checked))}
-                        aria-label="Recordarme en este dispositivo"
-                      />
-                      Recordarme en este dispositivo
-                    </label>
-                    <span className="text-xs text-muted-foreground">Uso exclusivo del estudio</span>
-                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    La sesión se mantiene en este dispositivo. Si es compartido, cerrá sesión al terminar.
+                  </p>
 
                   <Button id="btn-login" type="submit" disabled={loading} className="w-full">
                     {loading ? "Ingresando..." : "Ingresar"}

@@ -7,7 +7,7 @@ import { db } from "@/db";
 import { expenses, savingsContributions, savingsGoals } from "@/db/schema";
 import { buildSavingsGoalView } from "@/lib/savings-insights";
 import { createClient } from "@/lib/supabase/server";
-import { logActivity } from "./activity-log";
+import { logActivity } from "@/lib/activity-log";
 
 const SavingsGoalSchema = z.object({
   name: z.string().trim().min(1, "El nombre es obligatorio"),

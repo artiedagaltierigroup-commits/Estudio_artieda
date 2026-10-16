@@ -4,6 +4,7 @@ import { createHash, randomBytes } from "crypto";
 import { and, eq, ilike, inArray, ne, or } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { PDFDocument } from "pdf-lib";
 import { db } from "../db";
 import {
   signatureDocuments,
@@ -19,7 +20,11 @@ import { buildSignatureStoragePath, hashBufferSha256, SIGNATURE_BUCKET } from ".
 import type { SignatureRequestStatus } from "../lib/signature-status";
 import { createSupabaseAdminClient } from "../lib/supabase/admin";
 import { createClient } from "../lib/supabase/server";
-import { logActivity } from "./activity-log";
+import { logActivity } from "../lib/activity-log";
+import { canEditSignatureDocument, withSignatureRequestLock, type SignatureTransaction } from "../lib/signature-transaction";
+import { MAX_SIGNATURE_PDF_BYTES, MAX_SIGNATURE_PDF_MB } from "../lib/signature-limits";
+import { SignaturePlacementSchema } from "../lib/signature-placement-validation";
+import { isOwnedSignatureRequestGraph, isSignatureStoragePath } from "../lib/signature-storage-scope";
 import {
   buildRecipientTokenPayloads,
   parseSendSignedCopyToRecipients,
@@ -34,14 +39,6 @@ const SignatureDraftSchema = z.object({
   caseId: z.string().uuid("Caso invalido").optional().or(z.literal("")),
   subject: z.string().trim().min(1, "El asunto es obligatorio"),
   message: z.string().optional(),
-});
-
-const PlacementSchema = z.object({
-  pageNumber: z.coerce.number().int().min(1),
-  x: z.coerce.number().min(0).max(1),
-  y: z.coerce.number().min(0).max(1),
-  width: z.coerce.number().min(0.01).max(1),
-  height: z.coerce.number().min(0.01).max(1),
 });
 
 type SignatureEventType =
@@ -96,8 +93,8 @@ async function logSignatureEvent(params: {
   signaturePlacementId?: string | null;
   type: SignatureEventType;
   metadata?: Record<string, unknown>;
-}) {
-  await db.insert(signatureEvents).values({
+}, executor: typeof db | SignatureTransaction = db) {
+  await executor.insert(signatureEvents).values({
     userId: params.userId,
     signatureRequestId: params.signatureRequestId,
     signatureRecipientId: params.signatureRecipientId ?? null,
@@ -114,8 +111,8 @@ function revalidateSignaturePaths(request: { id: string; clientId?: string | nul
   if (request.caseId) revalidatePath(`/casos/${request.caseId}`);
 }
 
-async function getOwnedSignatureRequest(id: string, userId: string) {
-  return db.query.signatureRequests.findFirst({
+async function getOwnedSignatureRequest(id: string, userId: string, executor: typeof db | SignatureTransaction = db) {
+  const request = await executor.query.signatureRequests.findFirst({
     where: (item, { and: andOperator, eq: eqOperator }) =>
       andOperator(eqOperator(item.id, id), eqOperator(item.userId, userId)),
     with: {
@@ -142,6 +139,7 @@ async function getOwnedSignatureRequest(id: string, userId: string) {
       },
     },
   });
+  return request && isOwnedSignatureRequestGraph(request, userId) ? request : undefined;
 }
 
 export async function getSignatureRequests(filters?: {
@@ -195,7 +193,7 @@ export async function getSignatureRequests(filters?: {
     },
   });
 
-  return rows.map((row) => ({
+  return rows.filter((row) => isOwnedSignatureRequestGraph(row, userId)).map((row) => ({
     ...row,
     latestEvent: row.events[0] ?? null,
   }));
@@ -366,73 +364,83 @@ export async function createSignatureDraft(formData: FormData) {
 
 export async function uploadSignatureDocument(requestId: string, formData: FormData) {
   const userId = await getUserId();
-  const request = await getOwnedSignatureRequest(requestId, userId);
-  if (!request) return { error: "Solicitud no encontrada" };
-  if (request.status === "SIGNED" || request.status === "CANCELLED") {
-    return { error: "La solicitud ya no admite cambios de documento" };
-  }
+  return withSignatureRequestLock(requestId, async (tx) => {
+    const request = await getOwnedSignatureRequest(requestId, userId, tx);
+    if (!request) return { error: "Solicitud no encontrada" };
+    if (!canEditSignatureDocument(request)) {
+      return { error: "La solicitud ya no admite cambios de documento" };
+    }
 
-  const file = formData.get("document");
-  if (!(file instanceof File)) return { error: "Subi un PDF para continuar" };
-  if (file.type !== "application/pdf") return { error: "El documento debe ser PDF" };
+    const file = formData.get("document");
+    if (!(file instanceof File)) return { error: "Subi un PDF para continuar" };
+    if (file.type !== "application/pdf") return { error: "El documento debe ser PDF" };
+    if (file.size === 0 || file.size > MAX_SIGNATURE_PDF_BYTES) return { error: `El PDF debe tener contenido y no puede superar ${MAX_SIGNATURE_PDF_MB} MB` };
 
-  const buffer = Buffer.from(await file.arrayBuffer());
-  const originalSha256 = await hashBufferSha256(buffer);
-  const storagePath = buildSignatureStoragePath({
-    userId,
-    requestId,
-    kind: "original",
-    fileName: file.name,
-  });
+    const buffer = Buffer.from(await file.arrayBuffer());
+    try {
+      const pdf = await PDFDocument.load(buffer);
+      if (pdf.getPageCount() === 0) return { error: "El PDF no tiene paginas" };
+      if (request.recipients.some((recipient) => recipient.placements.some((placement) => placement.pageNumber > pdf.getPageCount()))) {
+        return { error: "Una ubicacion de firma queda fuera de las paginas del PDF" };
+      }
+    } catch { return { error: "El documento no es un PDF valido o esta protegido" }; }
+    const originalSha256 = await hashBufferSha256(buffer);
+    const storagePath = buildSignatureStoragePath({
+      userId,
+      requestId,
+      kind: "original",
+      fileName: `${originalSha256}-${file.name}`,
+    });
 
-  const supabase = createSupabaseAdminClient();
-  const { error } = await supabase.storage.from(SIGNATURE_BUCKET).upload(storagePath, buffer, {
-    contentType: file.type,
-    upsert: true,
-  });
+    const supabase = createSupabaseAdminClient();
+    const { error } = await supabase.storage.from(SIGNATURE_BUCKET).upload(storagePath, buffer, {
+      contentType: file.type,
+      upsert: true,
+    });
 
-  if (error) return { error: error.message };
+    if (error) return { error: error.message };
 
-  const existingDocument = request.document;
-  if (existingDocument) {
-    await db
-      .update(signatureDocuments)
-      .set({
+    const existingDocument = request.document;
+    if (existingDocument) {
+      await tx
+        .update(signatureDocuments)
+        .set({
+          originalFileName: file.name,
+          originalStoragePath: storagePath,
+          originalSha256,
+          updatedAt: new Date(),
+        })
+        .where(and(eq(signatureDocuments.id, existingDocument.id), eq(signatureDocuments.userId, userId)));
+    } else {
+      await tx.insert(signatureDocuments).values({
+        userId,
+        signatureRequestId: requestId,
         originalFileName: file.name,
         originalStoragePath: storagePath,
         originalSha256,
-        updatedAt: new Date(),
-      })
-      .where(and(eq(signatureDocuments.id, existingDocument.id), eq(signatureDocuments.userId, userId)));
-  } else {
-    await db.insert(signatureDocuments).values({
+        pageNumber: 1,
+        placementX: "0.58",
+        placementY: "0.72",
+        placementWidth: "0.28",
+        placementHeight: "0.12",
+      });
+    }
+
+    await tx
+      .update(signatureRequests)
+      .set({ status: "READY", updatedAt: new Date() })
+      .where(and(eq(signatureRequests.id, requestId), eq(signatureRequests.userId, userId)));
+
+    await logSignatureEvent({
       userId,
       signatureRequestId: requestId,
-      originalFileName: file.name,
-      originalStoragePath: storagePath,
-      originalSha256,
-      pageNumber: 1,
-      placementX: "0.58",
-      placementY: "0.72",
-      placementWidth: "0.28",
-      placementHeight: "0.12",
-    });
-  }
+      type: "document_uploaded",
+      metadata: { fileName: file.name, originalSha256 },
+    }, tx);
 
-  await db
-    .update(signatureRequests)
-    .set({ status: "READY", updatedAt: new Date() })
-    .where(and(eq(signatureRequests.id, requestId), eq(signatureRequests.userId, userId)));
-
-  await logSignatureEvent({
-    userId,
-    signatureRequestId: requestId,
-    type: "document_uploaded",
-    metadata: { fileName: file.name, originalSha256 },
+    revalidateSignaturePaths(request);
+    return { success: true };
   });
-
-  revalidateSignaturePaths(request);
-  return { success: true };
 }
 
 export async function updateSignaturePlacement(
@@ -440,141 +448,150 @@ export async function updateSignaturePlacement(
   placement: { pageNumber: number; x: number; y: number; width: number; height: number }
 ) {
   const userId = await getUserId();
-  const request = await getOwnedSignatureRequest(requestId, userId);
-  if (!request) return { error: "Solicitud no encontrada" };
-  if (!request.document) return { error: "Primero subi un PDF" };
+  return withSignatureRequestLock(requestId, async (tx) => {
+    const request = await getOwnedSignatureRequest(requestId, userId, tx);
+    if (!request) return { error: "Solicitud no encontrada" };
+    if (!request.document) return { error: "Primero subi un PDF" };
+    if (!canEditSignatureDocument(request)) return { error: "La solicitud enviada ya no admite cambios de ubicacion" };
 
-  const parsed = PlacementSchema.safeParse(placement);
-  if (!parsed.success) return { error: parsed.error.errors[0].message };
+    const parsed = SignaturePlacementSchema.safeParse(placement);
+    if (!parsed.success) return { error: parsed.error.errors[0].message };
 
-  await db
-    .update(signatureDocuments)
-    .set({
-      pageNumber: parsed.data.pageNumber,
-      placementX: parsed.data.x.toFixed(4),
-      placementY: parsed.data.y.toFixed(4),
-      placementWidth: parsed.data.width.toFixed(4),
-      placementHeight: parsed.data.height.toFixed(4),
-      updatedAt: new Date(),
-    })
-    .where(and(eq(signatureDocuments.id, request.document.id), eq(signatureDocuments.userId, userId)));
-
-  await db
-    .update(signatureRequests)
-    .set({ status: "READY", updatedAt: new Date() })
-    .where(and(eq(signatureRequests.id, requestId), eq(signatureRequests.userId, userId)));
-
-  await logSignatureEvent({
-    userId,
-    signatureRequestId: requestId,
-    type: "placement_selected",
-    metadata: parsed.data,
-  });
-
-  revalidateSignaturePaths(request);
-  return { success: true };
-}
-
-async function sendOrResendSignatureRequest(requestId: string, eventType: "sent" | "resent") {
-  const userId = await getUserId();
-  const request = await getOwnedSignatureRequest(requestId, userId);
-  if (!request) return { error: "Solicitud no encontrada" };
-  if (!request.document) return { error: "Subi el documento antes de enviar" };
-  if (request.status === "SIGNED") return { error: "La solicitud ya esta firmada" };
-  if (request.status === "CANCELLED") return { error: "La solicitud esta cancelada" };
-
-  const tokenExpiresAt = buildTokenExpiration();
-  const now = new Date();
-  const pendingRecipients = request.recipients.filter(
-    (recipient) => recipient.status !== "SIGNED" && recipient.status !== "CANCELLED" && recipient.status !== "EXPIRED"
-  );
-  if (pendingRecipients.length === 0) return { error: "No hay destinatarios pendientes" };
-  const recipientMissingPlacement = getFirstRecipientMissingPlacements(pendingRecipients);
-  if (recipientMissingPlacement) {
-    const label = recipientMissingPlacement.fullName || recipientMissingPlacement.email;
-    return { error: `${label} necesita al menos un espacio de firma` };
-  }
-
-  const recipientPayloads = pendingRecipients.map((recipient) => {
-    const token = buildToken();
-    return {
-      recipient,
-      token,
-      tokenHash: hashToken(token),
-      email: buildRecipientSignatureEmail({
-        recipientEmail: recipient.email,
-        subject: request.subject,
-        message: request.message,
-        token,
-      }),
-    };
-  });
-  const primaryPayload = recipientPayloads[0];
-
-  await db
-    .update(signatureRequests)
-    .set({
-      status: "SENT",
-      tokenHash: primaryPayload.tokenHash,
-      tokenExpiresAt,
-      sentAt: eventType === "sent" ? now : request.sentAt ?? now,
-      updatedAt: now,
-    })
-    .where(and(eq(signatureRequests.id, requestId), eq(signatureRequests.userId, userId)));
-
-  for (const payload of recipientPayloads) {
-    await db
-      .update(signatureRecipients)
+    await tx
+      .update(signatureDocuments)
       .set({
-        status: "SENT",
-        tokenHash: payload.tokenHash,
-        tokenExpiresAt,
-        sentAt: eventType === "sent" ? now : payload.recipient.sentAt ?? now,
-        updatedAt: now,
+        pageNumber: parsed.data.pageNumber,
+        placementX: parsed.data.x.toFixed(4),
+        placementY: parsed.data.y.toFixed(4),
+        placementWidth: parsed.data.width.toFixed(4),
+        placementHeight: parsed.data.height.toFixed(4),
+        updatedAt: new Date(),
       })
-      .where(and(eq(signatureRecipients.id, payload.recipient.id), eq(signatureRecipients.userId, userId)));
+      .where(and(eq(signatureDocuments.id, request.document.id), eq(signatureDocuments.userId, userId)));
 
-    await sendSignatureRequestEmail({
-      ...payload.email,
-    });
+    await tx
+      .update(signatureRequests)
+      .set({ status: "READY", updatedAt: new Date() })
+      .where(and(eq(signatureRequests.id, requestId), eq(signatureRequests.userId, userId)));
 
     await logSignatureEvent({
       userId,
       signatureRequestId: requestId,
-      signatureRecipientId: payload.recipient.id,
-      type: eventType,
-      metadata: { recipientEmail: payload.recipient.email },
+      type: "placement_selected",
+      metadata: parsed.data,
+    }, tx);
+
+    revalidateSignaturePaths(request);
+    return { success: true };
+  });
+}
+
+async function sendOrResendSignatureRequest(requestId: string, eventType: "sent" | "resent") {
+  const userId = await getUserId();
+  const prepared = await withSignatureRequestLock(requestId, async (tx) => {
+    const request = await getOwnedSignatureRequest(requestId, userId, tx);
+    if (!request) return { error: "Solicitud no encontrada" };
+    if (!request.document) return { error: "Subi el documento antes de enviar" };
+    if (request.status === "SIGNED") return { error: "La solicitud ya esta firmada" };
+    if (request.status === "CANCELLED") return { error: "La solicitud esta cancelada" };
+    if (request.status === "REJECTED" || request.status === "EXPIRED") return { error: "La solicitud finalizada requiere una nueva solicitud de firma" };
+
+    const tokenExpiresAt = buildTokenExpiration();
+    const now = new Date();
+    const pendingRecipients = request.recipients.filter(
+      (recipient) => recipient.status !== "SIGNED" && recipient.status !== "CANCELLED" && recipient.status !== "EXPIRED"
+    );
+    if (pendingRecipients.length === 0) return { error: "No hay destinatarios pendientes" };
+    const recipientMissingPlacement = getFirstRecipientMissingPlacements(pendingRecipients);
+    if (recipientMissingPlacement) {
+      const label = recipientMissingPlacement.fullName || recipientMissingPlacement.email;
+      return { error: `${label} necesita al menos un espacio de firma` };
+    }
+
+    const recipientPayloads = pendingRecipients.map((recipient) => {
+      const token = buildToken();
+      return {
+        recipient,
+        token,
+        tokenHash: hashToken(token),
+        email: buildRecipientSignatureEmail({
+          recipientEmail: recipient.email,
+          subject: request.subject,
+          message: request.message,
+          token,
+        }),
+      };
     });
-  }
+    const primaryPayload = recipientPayloads[0];
 
-  await logSignatureEvent({
-    userId,
-    signatureRequestId: requestId,
-    type: eventType,
-    metadata: {
-      recipientCount: recipientPayloads.length,
-      recipientEmails: recipientPayloads.map((payload) => payload.recipient.email),
-    },
+    await tx
+      .update(signatureRequests)
+      .set({
+        status: request.recipients.some((recipient) => recipient.status === "SIGNED") ? "PARTIALLY_SIGNED" : "SENT",
+        tokenHash: primaryPayload.tokenHash,
+        tokenExpiresAt,
+        sentAt: eventType === "sent" ? now : request.sentAt ?? now,
+        updatedAt: now,
+      })
+      .where(and(eq(signatureRequests.id, requestId), eq(signatureRequests.userId, userId)));
+
+    for (const payload of recipientPayloads) {
+      await tx
+        .update(signatureRecipients)
+        .set({
+          status: "SENT",
+          tokenHash: payload.tokenHash,
+          tokenExpiresAt,
+          sentAt: eventType === "sent" ? now : payload.recipient.sentAt ?? now,
+          updatedAt: now,
+        })
+        .where(and(eq(signatureRecipients.id, payload.recipient.id), eq(signatureRecipients.userId, userId)));
+
+      await logSignatureEvent({
+        userId,
+        signatureRequestId: requestId,
+        signatureRecipientId: payload.recipient.id,
+        type: eventType,
+        metadata: { recipientEmail: payload.recipient.email },
+      }, tx);
+    }
+
+    await logSignatureEvent({
+      userId,
+      signatureRequestId: requestId,
+      type: eventType,
+      metadata: {
+        recipientCount: recipientPayloads.length,
+        recipientEmails: recipientPayloads.map((payload) => payload.recipient.email),
+      },
+    }, tx);
+
+    await logActivity({
+      userId,
+      entityType: "signature_request",
+      entityId: requestId,
+      action: eventType,
+      newValue: { status: "SENT", tokenExpiresAt },
+    }, tx);
+
+    revalidateSignaturePaths(request);
+    return {
+      success: true,
+      emails: recipientPayloads.map((payload) => payload.email),
+      signingUrl: primaryPayload.email.signingUrl,
+      signingUrls: recipientPayloads.map((payload) => ({
+        recipientId: payload.recipient.id,
+        email: payload.recipient.email,
+        signingUrl: payload.email.signingUrl,
+      })),
+    };
   });
-
-  await logActivity({
-    userId,
-    entityType: "signature_request",
-    entityId: requestId,
-    action: eventType,
-    newValue: { status: "SENT", tokenExpiresAt },
-  });
-
-  revalidateSignaturePaths(request);
-  return {
-    success: true,
-    signingUrl: primaryPayload.email.signingUrl,
-    signingUrls: recipientPayloads.map((payload) => ({
-      recipientId: payload.recipient.id,
-      email: payload.recipient.email,
-      signingUrl: payload.email.signingUrl,
-    })),
-  };
+  if ("error" in prepared) return prepared;
+  // Commit the new tokens before delivery: a later mail failure must not invalidate an already delivered link.
+  const { emails, ...result } = prepared;
+  try { for (const email of emails) await sendSignatureRequestEmail(email); }
+  catch { return { error: "La solicitud quedo guardada, pero no se pudieron enviar todos los correos. Podes reenviarlos desde el detalle." }; }
+  return result;
 }
 
 export async function sendSignatureRequest(requestId: string) {
@@ -587,137 +604,145 @@ export async function resendSignatureRequest(requestId: string) {
 
 export async function resendSignatureRecipient(requestId: string, recipientId: string) {
   const userId = await getUserId();
-  const request = await getOwnedSignatureRequest(requestId, userId);
-  if (!request) return { error: "Solicitud no encontrada" };
-  if (!request.document) return { error: "Subi el documento antes de reenviar" };
-  if (request.status === "SIGNED") return { error: "La solicitud ya esta firmada" };
-  if (request.status === "CANCELLED") return { error: "La solicitud esta cancelada" };
+  const prepared = await withSignatureRequestLock(requestId, async (tx) => {
+    const request = await getOwnedSignatureRequest(requestId, userId, tx);
+    if (!request) return { error: "Solicitud no encontrada" };
+    if (!request.document) return { error: "Subi el documento antes de reenviar" };
+    if (request.status === "SIGNED") return { error: "La solicitud ya esta firmada" };
+    if (request.status === "CANCELLED") return { error: "La solicitud esta cancelada" };
+    if (request.status === "REJECTED" || request.status === "EXPIRED") return { error: "La solicitud finalizada requiere una nueva solicitud de firma" };
 
-  const recipient = request.recipients.find((item) => item.id === recipientId);
-  if (!recipient) return { error: "Destinatario no encontrado" };
-  if (recipient.status === "SIGNED") return { error: "El destinatario ya firmo" };
-  if (recipient.status === "CANCELLED" || recipient.status === "EXPIRED") {
-    return { error: "El destinatario ya no esta pendiente" };
-  }
-  if (getFirstRecipientMissingPlacements([recipient])) {
-    const label = recipient.fullName || recipient.email;
-    return { error: `${label} necesita al menos un espacio de firma` };
-  }
+    const recipient = request.recipients.find((item) => item.id === recipientId);
+    if (!recipient) return { error: "Destinatario no encontrado" };
+    if (recipient.status === "SIGNED") return { error: "El destinatario ya firmo" };
+    if (recipient.status === "CANCELLED" || recipient.status === "EXPIRED") {
+      return { error: "El destinatario ya no esta pendiente" };
+    }
+    if (getFirstRecipientMissingPlacements([recipient])) {
+      const label = recipient.fullName || recipient.email;
+      return { error: `${label} necesita al menos un espacio de firma` };
+    }
 
-  const now = new Date();
-  const token = buildToken();
-  const tokenHash = hashToken(token);
-  const tokenExpiresAt = buildTokenExpiration(now);
-  const email = buildRecipientSignatureEmail({
-    recipientEmail: recipient.email,
-    subject: request.subject,
-    message: request.message,
-    token,
+    const now = new Date();
+    const token = buildToken();
+    const tokenHash = hashToken(token);
+    const tokenExpiresAt = buildTokenExpiration(now);
+    const email = buildRecipientSignatureEmail({
+      recipientEmail: recipient.email,
+      subject: request.subject,
+      message: request.message,
+      token,
+    });
+
+    await tx
+      .update(signatureRecipients)
+      .set({
+        status: "SENT",
+        tokenHash,
+        tokenExpiresAt,
+        sentAt: recipient.sentAt ?? now,
+        updatedAt: now,
+      })
+      .where(and(eq(signatureRecipients.id, recipient.id), eq(signatureRecipients.userId, userId)));
+
+    await tx
+      .update(signatureRequests)
+      .set({ status: request.recipients.some((item) => item.status === "SIGNED") ? "PARTIALLY_SIGNED" : "SENT", tokenHash, tokenExpiresAt, sentAt: request.sentAt ?? now, updatedAt: now })
+      .where(and(eq(signatureRequests.id, requestId), eq(signatureRequests.userId, userId)));
+
+    await logSignatureEvent({
+      userId,
+      signatureRequestId: requestId,
+      signatureRecipientId: recipient.id,
+      type: "resent",
+      metadata: { recipientEmail: recipient.email },
+    }, tx);
+
+    await logActivity({
+      userId,
+      entityType: "signature_request",
+      entityId: requestId,
+      action: "resent",
+      newValue: { recipientId: recipient.id, recipientEmail: recipient.email, tokenExpiresAt },
+    }, tx);
+
+    revalidateSignaturePaths(request);
+    return { success: true, signingUrl: email.signingUrl, email };
   });
-
-  await db
-    .update(signatureRecipients)
-    .set({
-      status: "SENT",
-      tokenHash,
-      tokenExpiresAt,
-      sentAt: recipient.sentAt ?? now,
-      updatedAt: now,
-    })
-    .where(and(eq(signatureRecipients.id, recipient.id), eq(signatureRecipients.userId, userId)));
-
-  await db
-    .update(signatureRequests)
-    .set({ status: "SENT", tokenHash, tokenExpiresAt, sentAt: request.sentAt ?? now, updatedAt: now })
-    .where(and(eq(signatureRequests.id, requestId), eq(signatureRequests.userId, userId)));
-
-  await sendSignatureRequestEmail({
-    ...email,
-  });
-
-  await logSignatureEvent({
-    userId,
-    signatureRequestId: requestId,
-    signatureRecipientId: recipient.id,
-    type: "resent",
-    metadata: { recipientEmail: recipient.email },
-  });
-
-  await logActivity({
-    userId,
-    entityType: "signature_request",
-    entityId: requestId,
-    action: "resent",
-    newValue: { recipientId: recipient.id, recipientEmail: recipient.email, tokenExpiresAt },
-  });
-
-  revalidateSignaturePaths(request);
-  return { success: true, signingUrl: email.signingUrl };
+  if ("error" in prepared) return prepared;
+  const { email, ...result } = prepared;
+  try { await sendSignatureRequestEmail(email); }
+  catch { return { error: "La solicitud quedo guardada, pero el correo no pudo enviarse. Intenta reenviarlo." }; }
+  return result;
 }
 
 export async function cancelSignatureRequest(requestId: string) {
   const userId = await getUserId();
-  const request = await getOwnedSignatureRequest(requestId, userId);
-  if (!request) return { error: "Solicitud no encontrada" };
-  if (request.status === "SIGNED") return { error: "No se puede cancelar una solicitud firmada" };
+  return withSignatureRequestLock(requestId, async (tx) => {
+    const request = await getOwnedSignatureRequest(requestId, userId, tx);
+    if (!request) return { error: "Solicitud no encontrada" };
+    if (request.status === "SIGNED") return { error: "No se puede cancelar una solicitud firmada" };
 
-  const cancelledAt = new Date();
-  await db
-    .update(signatureRequests)
-    .set({ status: "CANCELLED", cancelledAt, updatedAt: cancelledAt })
-    .where(and(eq(signatureRequests.id, requestId), eq(signatureRequests.userId, userId)));
+    const cancelledAt = new Date();
+    await tx
+      .update(signatureRequests)
+      .set({ status: "CANCELLED", cancelledAt, updatedAt: cancelledAt })
+      .where(and(eq(signatureRequests.id, requestId), eq(signatureRequests.userId, userId)));
 
-  await db
-    .update(signatureRecipients)
-    .set({ status: "CANCELLED", cancelledAt, updatedAt: cancelledAt })
-    .where(
-      and(
-        eq(signatureRecipients.signatureRequestId, requestId),
-        eq(signatureRecipients.userId, userId),
-        ne(signatureRecipients.status, "SIGNED")
-      )
-    );
+    await tx
+      .update(signatureRecipients)
+      .set({ status: "CANCELLED", cancelledAt, updatedAt: cancelledAt })
+      .where(
+        and(
+          eq(signatureRecipients.signatureRequestId, requestId),
+          eq(signatureRecipients.userId, userId),
+          ne(signatureRecipients.status, "SIGNED")
+        )
+      );
 
-  await logSignatureEvent({
-    userId,
-    signatureRequestId: requestId,
-    type: "cancelled",
+    await logSignatureEvent({
+      userId,
+      signatureRequestId: requestId,
+      type: "cancelled",
+    }, tx);
+
+    await logActivity({
+      userId,
+      entityType: "signature_request",
+      entityId: requestId,
+      action: "cancelled",
+      previousValue: { status: request.status },
+      newValue: { status: "CANCELLED", cancelledAt },
+    }, tx);
+
+    revalidateSignaturePaths(request);
+    return { success: true };
   });
-
-  await logActivity({
-    userId,
-    entityType: "signature_request",
-    entityId: requestId,
-    action: "cancelled",
-    previousValue: { status: request.status },
-    newValue: { status: "CANCELLED", cancelledAt },
-  });
-
-  revalidateSignaturePaths(request);
-  return { success: true };
 }
 
 export async function deleteSignatureRequest(requestId: string) {
   const userId = await getUserId();
-  const request = await getOwnedSignatureRequest(requestId, userId);
-  if (!request) return { error: "Solicitud no encontrada" };
+  return withSignatureRequestLock(requestId, async (tx) => {
+    const request = await getOwnedSignatureRequest(requestId, userId, tx);
+    if (!request) return { error: "Solicitud no encontrada" };
 
-  await logActivity({
-    userId,
-    entityType: "signature_request",
-    entityId: requestId,
-    action: "deleted",
-    previousValue: {
-      status: request.status,
-      subject: request.subject,
-      recipientEmail: request.recipientEmail,
-    },
+    await logActivity({
+      userId,
+      entityType: "signature_request",
+      entityId: requestId,
+      action: "deleted",
+      previousValue: {
+        status: request.status,
+        subject: request.subject,
+        recipientEmail: request.recipientEmail,
+      },
+    }, tx);
+
+    await tx.delete(signatureRequests).where(and(eq(signatureRequests.id, requestId), eq(signatureRequests.userId, userId)));
+
+    revalidateSignaturePaths(request);
+    return { success: true };
   });
-
-  await db.delete(signatureRequests).where(and(eq(signatureRequests.id, requestId), eq(signatureRequests.userId, userId)));
-
-  revalidateSignaturePaths(request);
-  return { success: true };
 }
 
 export async function downloadSignedDocument(requestId: string) {
@@ -725,6 +750,9 @@ export async function downloadSignedDocument(requestId: string) {
   const request = await getOwnedSignatureRequest(requestId, userId);
   if (!request) return { error: "Solicitud no encontrada" };
   if (!request.document?.signedStoragePath) return { error: "El PDF firmado todavia no esta disponible" };
+  if (!isSignatureStoragePath(request.document.signedStoragePath, { userId, requestId: request.id })) {
+    return { error: "Archivo no disponible" };
+  }
 
   await logSignatureEvent({
     userId,
@@ -749,6 +777,7 @@ export async function getSignatureOriginalDocumentUrl(requestId: string) {
   const userId = await getUserId();
   const request = await getOwnedSignatureRequest(requestId, userId);
   if (!request?.document) return null;
+  if (!isSignatureStoragePath(request.document.originalStoragePath, { userId, requestId: request.id })) return null;
 
   const supabase = createSupabaseAdminClient();
   const { data, error } = await supabase.storage

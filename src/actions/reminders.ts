@@ -7,7 +7,7 @@ import { db } from "@/db";
 import { reminders } from "@/db/schema";
 import { createClient } from "@/lib/supabase/server";
 import { normalizeReminderMutationInput } from "@/lib/form-normalizers";
-import { logActivity } from "./activity-log";
+import { logActivity } from "@/lib/activity-log";
 
 const ReminderSchema = z.object({
   caseId: z.string().uuid().optional().or(z.literal("")),
@@ -30,7 +30,7 @@ async function getUserId(): Promise<string> {
 
 export async function getReminders() {
   const userId = await getUserId();
-  return db.query.reminders.findMany({
+  const rows = await db.query.reminders.findMany({
     where: (item, { eq: eqOperator }) => eqOperator(item.userId, userId),
     with: {
       case: { with: { client: true } },
@@ -38,6 +38,27 @@ export async function getReminders() {
     },
     orderBy: (item, { asc }) => [asc(item.reminderDate)],
   });
+  return rows.filter(row =>
+    (!row.client || row.client.userId === userId) &&
+    (!row.case || (row.case.userId === userId && row.case.client.userId === userId))
+  );
+}
+
+async function ownsReminderReferences(userId: string, values: { clientId?: string; caseId?: string }) {
+  if (values.clientId) {
+    const client = await db.query.clients.findFirst({
+      where: (item, { and, eq }) => and(eq(item.id, values.clientId!), eq(item.userId, userId)),
+    });
+    if (!client) return false;
+  }
+  if (values.caseId) {
+    const linkedCase = await db.query.cases.findFirst({
+      where: (item, { and, eq }) => and(eq(item.id, values.caseId!), eq(item.userId, userId)),
+      with: { client: true },
+    });
+    if (!linkedCase || linkedCase.client.userId !== userId) return false;
+  }
+  return true;
 }
 
 export async function getReminderReferences() {
@@ -57,7 +78,7 @@ export async function getReminderReferences() {
 
   return {
     clients: clientRows.map((client) => ({ id: client.id, name: client.name })),
-    cases: caseRows.map((currentCase) => ({
+    cases: caseRows.filter(currentCase => currentCase.client.userId === userId).map((currentCase) => ({
       id: currentCase.id,
       title: currentCase.title,
       clientName: currentCase.client.name,
@@ -70,6 +91,7 @@ export async function createReminder(formData: FormData) {
   const raw = Object.fromEntries(formData.entries());
   const parsed = ReminderSchema.safeParse(raw);
   if (!parsed.success) return { error: parsed.error.errors[0].message };
+  if (!await ownsReminderReferences(userId, parsed.data)) return { error: "Caso o cliente no encontrado" };
 
   const normalized = normalizeReminderMutationInput(parsed.data);
   const [inserted] = await db
@@ -97,6 +119,11 @@ export async function updateReminder(id: string, formData: FormData) {
   const raw = Object.fromEntries(formData.entries());
   const parsed = ReminderSchema.safeParse(raw);
   if (!parsed.success) return { error: parsed.error.errors[0].message };
+  const existing = await db.query.reminders.findFirst({
+    where: (item, { and, eq }) => and(eq(item.id, id), eq(item.userId, userId)),
+  });
+  if (!existing) return { error: "Recordatorio no encontrado" };
+  if (!await ownsReminderReferences(userId, parsed.data)) return { error: "Caso o cliente no encontrado" };
 
   const normalized = normalizeReminderMutationInput(parsed.data);
   await db

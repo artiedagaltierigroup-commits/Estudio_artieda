@@ -1,0 +1,1 @@
+ALTER TYPE "public"."recurring_expense_occurrence_status" ADD VALUE 'CANCELLED';

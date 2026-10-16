@@ -1,11 +1,11 @@
-import { differenceInCalendarDays, formatDistanceToNowStrict, parseISO } from "date-fns";
-import { es } from "date-fns/locale";
+import { differenceInCalendarDays, parseISO } from "date-fns";
 import { MoneyAmount } from "@/components/system/money-amount";
 import { SectionCard } from "@/components/system/section-card";
 import { StatusChip } from "@/components/system/status-chip";
 import { SubmitButton } from "@/components/system/submit-button";
 import { getReminderPriorityTone } from "@/lib/module-presenters";
 import { getReminderWindowStart } from "@/lib/recurring-expense-occurrences";
+import { getBusinessDate } from "@/lib/business-date";
 import { formatDate, getPriorityLabel } from "@/lib/utils";
 import { CheckCircle2, Circle, RotateCcw } from "lucide-react";
 import Link from "next/link";
@@ -18,20 +18,22 @@ interface ChecklistItem {
   dueDate: string;
   priority: "LOW" | "MEDIUM" | "HIGH";
   notifyDaysBefore: number;
-  status: "PENDING" | "PAID" | "OVERDUE";
+  status: "PENDING" | "PAID" | "OVERDUE" | "CANCELLED";
 }
 
 interface RecurringPayablesChecklistProps {
   pending: ChecklistItem[];
   paid: ChecklistItem[];
+  cancelled?: ChecklistItem[];
   onMarkPaid: (formData: FormData) => void | Promise<void>;
   onReopen: (formData: FormData) => void | Promise<void>;
 }
 
 function ChecklistProgress({ dueDate, notifyDaysBefore }: { dueDate: string; notifyDaysBefore: number }) {
-  const today = new Date();
+  const today = parseISO(getBusinessDate());
   const visibleFrom = parseISO(getReminderWindowStart(dueDate, notifyDaysBefore));
   const due = parseISO(dueDate);
+  const daysUntilDue = differenceInCalendarDays(due, today);
   const totalDays = Math.max(1, differenceInCalendarDays(due, visibleFrom));
   const elapsedDays = Math.min(Math.max(0, differenceInCalendarDays(today, visibleFrom)), totalDays);
   const progress = Math.min(100, Math.max(0, (elapsedDays / totalDays) * 100));
@@ -39,7 +41,7 @@ function ChecklistProgress({ dueDate, notifyDaysBefore }: { dueDate: string; not
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between text-[0.72rem] text-muted-foreground">
-        <span>{formatDistanceToNowStrict(due, { locale: es, addSuffix: true })}</span>
+        <span>{daysUntilDue === 0 ? "Vence hoy" : daysUntilDue > 0 ? `Vence en ${daysUntilDue} dia(s)` : `Vencio hace ${Math.abs(daysUntilDue)} dia(s)`}</span>
         <span>Vence {formatDate(dueDate)}</span>
       </div>
       <div className="h-2 overflow-hidden rounded-full bg-muted">
@@ -71,6 +73,7 @@ function ChecklistCard({
           <SubmitButton
             variant="ghost"
             size="icon"
+            aria-label={done ? `Reabrir ${item.description}` : `Marcar pagado ${item.description}`}
             className={`h-9 w-9 rounded-full border ${done ? "border-emerald-300 bg-emerald-50 text-emerald-700" : "border-border"}`}
             pendingLabel={done ? <RotateCcw className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
           >
@@ -82,7 +85,7 @@ function ChecklistCard({
           <div className="flex flex-wrap items-center gap-2">
             <p className={`text-sm font-semibold text-foreground ${done ? "line-through opacity-70" : ""}`}>{item.description}</p>
             <StatusChip label={getPriorityLabel(item.priority)} tone={getReminderPriorityTone(item.priority)} />
-            <StatusChip label={item.status === "OVERDUE" ? "Vencido" : done ? "Pagado" : "Pendiente"} tone={done ? "sage" : item.status === "OVERDUE" ? "danger" : "amber"} />
+            <StatusChip label={item.status === "CANCELLED" ? "Anulado" : item.status === "OVERDUE" ? "Vencido" : done ? "Pagado" : "Pendiente"} tone={item.status === "CANCELLED" ? "danger" : done ? "sage" : item.status === "OVERDUE" ? "danger" : "amber"} />
           </div>
 
           <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
@@ -103,7 +106,7 @@ function ChecklistCard({
             {done ? (
               <span className="inline-flex items-center gap-1 text-muted-foreground">
                 <RotateCcw className="h-3.5 w-3.5" />
-                Desmarcar lo devuelve a pendientes
+                {item.status === "CANCELLED" ? "Reabrir lo devuelve a pendientes" : "Desmarcar lo devuelve a pendientes"}
               </span>
             ) : null}
           </div>
@@ -116,6 +119,7 @@ function ChecklistCard({
 export function RecurringPayablesChecklist({
   pending,
   paid,
+  cancelled = [],
   onMarkPaid,
   onReopen,
 }: RecurringPayablesChecklistProps) {
@@ -154,6 +158,13 @@ export function RecurringPayablesChecklist({
           )}
         </div>
       </div>
+      {cancelled.length > 0 ? (
+        <div className="mt-6 space-y-3">
+          <p className="text-sm font-semibold text-foreground">Anulados ({cancelled.length})</p>
+          <p className="text-xs text-muted-foreground">Conservan su historial. Podés reabrirlos si corresponde registrar un nuevo pago.</p>
+          {cancelled.map((item) => <ChecklistCard key={item.occurrenceId} item={item} action={onReopen} done />)}
+        </div>
+      ) : null}
     </SectionCard>
   );
 }

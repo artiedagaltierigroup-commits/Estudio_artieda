@@ -3,9 +3,10 @@
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { FileText } from "lucide-react";
+import { MAX_SIGNATURE_PDF_BYTES, MAX_SIGNATURE_PDF_MB } from "@/lib/signature-limits";
 
-const maxPdfSizeMb = 10;
-const maxPdfSizeBytes = maxPdfSizeMb * 1024 * 1024;
+const maxPdfSizeMb = MAX_SIGNATURE_PDF_MB;
+const maxPdfSizeBytes = MAX_SIGNATURE_PDF_BYTES;
 
 interface PdfUploadFieldProps {
   fileName: string;

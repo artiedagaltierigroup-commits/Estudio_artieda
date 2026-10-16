@@ -88,15 +88,15 @@ export default async function DashboardPage() {
     },
     {
       label: "Gastos del mes",
-      value: <MoneyAmount value={metrics.periodExpenses + metrics.projectedRecurring} />,
-      subtitle: "Gastos reales mas proyeccion recurrente.",
+      value: <MoneyAmount value={metrics.periodExpenses} />,
+      subtitle: "Egresos reales registrados durante este periodo.",
       icon: TrendingDown,
       tone: "danger" as const,
     },
     {
       label: "Resultado neto",
       value: <MoneyAmount value={metrics.netResult} />,
-      subtitle: "Cobrado real menos gasto real y fijo proyectado.",
+      subtitle: "Cobrado real menos gastos reales del periodo.",
       icon: Wallet,
       tone: metrics.netResult >= 0 ? ("sage" as const) : ("danger" as const),
     },
@@ -131,7 +131,7 @@ export default async function DashboardPage() {
           { label: "Periodo", value: periodLabel },
           { label: "Mejor mes", value: metrics.topMonth?.month ?? "Sin datos" },
           { label: "Cliente destacado", value: metrics.topClient?.name ?? "Sin datos" },
-          { label: "Proyeccion fija", value: <MoneyAmount value={metrics.projectedRecurring} /> },
+          { label: "Proyeccion pendiente", value: <MoneyAmount value={metrics.projectedRecurring} /> },
         ]}
       />
 
@@ -184,6 +184,7 @@ export default async function DashboardPage() {
       <RecurringPayablesChecklist
         pending={recurringChecklist.pending}
         paid={recurringChecklist.paid}
+        cancelled={recurringChecklist.cancelled}
         onMarkPaid={handleMarkPaid}
         onReopen={handleReopen}
       />

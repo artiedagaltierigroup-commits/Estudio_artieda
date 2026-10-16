@@ -1,3 +1,7 @@
+"use client";
+
+import { useActionState, useState } from "react";
+import { useRouter } from "next/navigation";
 import { SectionCard } from "@/components/system/section-card";
 import { SubmitButton } from "@/components/system/submit-button";
 import { Button } from "@/components/ui/button";
@@ -13,7 +17,8 @@ const selectClassName =
   "flex h-11 w-full rounded-2xl border border-input bg-background px-4 py-2 text-sm text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
 interface ChargeFormProps {
-  action: (formData: FormData) => void | Promise<void>;
+  action: (formData: FormData) => Promise<{ success?: boolean; error?: string; chargeId?: string }>;
+  creationId?: string;
   cancelHref: string;
   submitLabel: string;
   cases: Array<{
@@ -35,15 +40,36 @@ interface ChargeFormProps {
 
 export function ChargeForm({
   action,
+  creationId,
   cancelHref,
   submitLabel,
   cases,
   defaultCaseId,
   initialValues,
 }: ChargeFormProps) {
+  const router = useRouter();
+  const [attemptId] = useState(creationId);
+  const [fields, setFields] = useState({
+    caseId: initialValues?.caseId ?? defaultCaseId ?? "",
+    description: initialValues?.description ?? "",
+    dueDate: initialValues?.dueDate ?? "",
+    notes: initialValues?.notes ?? "",
+    markAsPaid: false,
+  });
+  const [result, submitCharge] = useActionState(async (_previous: { success?: boolean; error?: string; chargeId?: string }, formData: FormData) => {
+    try {
+      const response = await action(formData);
+      if (response.success && response.chargeId) router.push(`/cobros/${response.chargeId}`);
+      return response;
+    } catch {
+      return { error: "No se pudo confirmar el guardado. Reintentá con los mismos datos para comprobarlo sin duplicarlo." };
+    }
+  }, {});
   return (
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_320px]">
-      <form action={action} className="space-y-6">
+      <form action={submitCharge} className="space-y-6">
+        {!initialValues && <input type="hidden" name="chargeId" value={attemptId ?? ""} />}
+        {result.error && <p role="alert" className="text-sm text-destructive">{result.error}</p>}
         <SectionCard
           eyebrow="Asociacion"
           title="Caso y descripcion"
@@ -56,7 +82,8 @@ export function ChargeForm({
                 id="caseId"
                 name="caseId"
                 required
-                defaultValue={initialValues?.caseId ?? defaultCaseId ?? ""}
+                value={fields.caseId}
+                onChange={(event) => setFields({ ...fields, caseId: event.target.value })}
                 className={selectClassName}
               >
                 <option value="">Seleccionar caso...</option>
@@ -74,7 +101,8 @@ export function ChargeForm({
                 id="description"
                 name="description"
                 required
-                defaultValue={initialValues?.description ?? ""}
+                value={fields.description}
+                onChange={(event) => setFields({ ...fields, description: event.target.value })}
                 placeholder="Ejemplo: anticipo, cuota 1, saldo final o audiencia"
               />
             </div>
@@ -100,12 +128,14 @@ export function ChargeForm({
 
             <div className="space-y-2">
               <Label htmlFor="dueDate">Fecha de vencimiento</Label>
-              <Input id="dueDate" name="dueDate" type="date" defaultValue={initialValues?.dueDate ?? ""} />
+              <Input id="dueDate" name="dueDate" type="date" value={fields.dueDate}
+                onChange={(event) => setFields({ ...fields, dueDate: event.target.value })} />
             </div>
 
-            <div className="space-y-2 sm:col-span-2">
+            {!initialValues && <div className="space-y-2 sm:col-span-2">
               <div className="flex items-start gap-3 rounded-[24px] border border-border/70 bg-white/80 px-4 py-4">
-                <Checkbox id="markAsPaid" name="markAsPaid" />
+                <Checkbox id="markAsPaid" name="markAsPaid" checked={fields.markAsPaid}
+                  onCheckedChange={(checked) => setFields({ ...fields, markAsPaid: checked === true })} />
                 <div className="space-y-1">
                   <Label htmlFor="markAsPaid">Marcar como ya pagado</Label>
                   <p className="text-xs leading-5 text-muted-foreground">
@@ -113,14 +143,15 @@ export function ChargeForm({
                   </p>
                 </div>
               </div>
-            </div>
+            </div>}
 
             <div className="space-y-2 sm:col-span-2">
               <Label htmlFor="notes">Notas</Label>
               <Textarea
                 id="notes"
                 name="notes"
-                defaultValue={initialValues?.notes ?? ""}
+                value={fields.notes}
+                onChange={(event) => setFields({ ...fields, notes: event.target.value })}
                 placeholder="Ejemplo: pactado en dos partes o requiere seguimiento telefonico."
               />
             </div>

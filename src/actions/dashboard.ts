@@ -20,7 +20,7 @@ import {
   getPreviousEquivalentRange,
 } from "@/lib/statistics-insights";
 import { createClient } from "@/lib/supabase/server";
-import { getMonthlyProjection } from "./recurring-expenses";
+import { getPendingRecurringProjection } from "./recurring-expenses";
 
 async function getUserId(): Promise<string> {
   const supabase = await createClient();
@@ -264,9 +264,9 @@ export async function getDashboardOverview(filters: DashboardFilters): Promise<D
     .filter((expense) => expense.date >= from && expense.date <= to)
     .reduce((sum, expense) => sum + Number(expense.amount), 0);
 
-  const projectedRecurring = await getMonthlyProjection(new Date(from));
-  const pendingIncome = Math.max(0, expectedIncome - collectedIncome);
-  const netResult = collectedIncome - (periodExpenses + projectedRecurring);
+  const projectedRecurring = await getPendingRecurringProjection(from, to);
+  const pendingIncome = periodCharges.reduce((sum, charge) => sum + charge.balance, 0);
+  const netResult = collectedIncome - periodExpenses;
   const grossIncome = paymentRows.reduce((sum, payment) => sum + Number(payment.amount), 0);
   const netIncome = grossIncome - expenseRows.reduce((sum, expense) => sum + Number(expense.amount), 0);
 

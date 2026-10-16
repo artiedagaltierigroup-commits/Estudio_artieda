@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { PdfPlacementSelector } from "@/components/signatures/pdf-placement-selector";
+import dynamic from "next/dynamic";
 import { formatFileSize, PdfUploadField } from "@/components/signatures/pdf-upload-field";
 import { SignatureEmailEditor } from "@/components/signatures/signature-email-editor";
 import {
@@ -16,6 +16,11 @@ import { Label } from "@/components/ui/label";
 import { splitPersonName } from "@/actions/signatures-helpers";
 import { Save } from "lucide-react";
 import Link from "next/link";
+
+const PdfPlacementSelector = dynamic(
+  () => import("@/components/signatures/pdf-placement-selector").then((module) => module.PdfPlacementSelector),
+  { ssr: false, loading: () => <p role="status">Cargando visor de PDF...</p> },
+);
 
 const selectClassName =
   "flex h-11 w-full rounded-2xl border border-input bg-background px-4 py-2 text-sm text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";

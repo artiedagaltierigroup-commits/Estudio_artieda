@@ -1,4 +1,5 @@
-import { endOfMonth, format, startOfMonth } from "date-fns";
+import { endOfMonth, format, parseISO, startOfMonth } from "date-fns";
+import { getBusinessDate } from "./business-date";
 
 import { getReminderWindowStart, type RecurringExpenseOccurrenceStatus } from "./recurring-expense-occurrences";
 
@@ -18,9 +19,10 @@ export interface RecurringPayableChecklistRow {
 }
 
 export function getRecurringPayableChecklistRange(referenceDate: Date) {
+  const calendarDate = parseISO(getBusinessDate(referenceDate));
   return {
-    from: format(startOfMonth(referenceDate), "yyyy-MM-dd"),
-    to: format(endOfMonth(referenceDate), "yyyy-MM-dd"),
+    from: format(startOfMonth(calendarDate), "yyyy-MM-dd"),
+    to: format(endOfMonth(calendarDate), "yyyy-MM-dd"),
   };
 }
 
@@ -28,13 +30,13 @@ export function isRecurringPayableAlertVisible(
   row: Pick<RecurringPayableChecklistRow, "dueDate" | "notifyDaysBefore" | "status">,
   todayKey: string
 ) {
-  if (row.status === "PAID") return false;
+  if (row.status === "PAID" || row.status === "CANCELLED") return false;
   return getReminderWindowStart(row.dueDate, row.notifyDaysBefore) <= todayKey;
 }
 
 export function buildRecurringPayableChecklist<T extends RecurringPayableChecklistRow>(rows: T[]) {
   const pending = rows
-    .filter((row) => row.status !== "PAID")
+    .filter((row) => row.status === "PENDING" || row.status === "OVERDUE")
     .sort((left, right) => {
       const leftOverdue = left.status === "OVERDUE";
       const rightOverdue = right.status === "OVERDUE";
@@ -51,6 +53,7 @@ export function buildRecurringPayableChecklist<T extends RecurringPayableCheckli
   return {
     pending: pending.map((item) => ({ ...item, status: item.status as "PENDING" | "OVERDUE" })),
     paid: paid.map((item) => ({ ...item, status: "PAID" as const })),
+    cancelled: rows.filter((row) => row.status === "CANCELLED").map((item) => ({ ...item, status: "CANCELLED" as const })),
     summary: {
       pending: pending.length,
       overdue: pending.filter((item) => item.status === "OVERDUE").length,
