@@ -53,8 +53,10 @@ Las siguientes migraciones deben generarse y revisarse antes de aplicar SQL. No 
 ## Verificación de la entrega
 
 - Aplicación preparada para publicación: **366/366 pruebas**, ninguna fallida ni omitida; PostgreSQL real en cuatro bases locales dedicadas, datos sintéticos, correo y Storage simulados.
+- Comprobación conjunta final en el directorio principal, tras actualizar dependencias y separar las copias antiguas: **421/421 pruebas**, ninguna fallida ni omitida. Incluye aplicación y respaldos; no se suma al recuento de la entrega.
 - Respaldo: **52/52 pruebas específicas**, incluidas PowerShell 5/7, permisos, enlaces, integridad y preservación de configuración.
 - TypeScript independiente, lint sin advertencias y compilación optimizada: aprobados.
+- La comprobación adicional del directorio principal detectó seis copias de trabajo antiguas bajo `.worktrees` que se incluían en la búsqueda genérica de pruebas. Se detuvo esa ejecución y se delimitó la suite a `src`, `scripts` y `tests`; TypeScript también excluye copias de trabajo y evidencias. Este ajuste afecta las herramientas locales, no el comportamiento publicado.
 - Navegador: carga real del PDF sintético y su worker, sin errores de consola; calendario móvil a 390 px y acceso público.
 - No se realizaron cobros, firmas, altas, anulaciones ni envíos de correo de prueba sobre clientes reales.
 
@@ -84,6 +86,6 @@ Publicado en [estudio-artieda.vercel.app](https://estudio-artieda.vercel.app) el
 
 La primera comprobación administrativa usó la variable local alternativa de Supabase y recibió 401. Al usar la misma prioridad de claves que la aplicación (`SUPABASE_SERVICE_ROLE_KEY` antes que `SUPABASE_SECRET_KEY`), los cinco controles respondieron 200. No se cambiaron claves del sistema para esta comprobación.
 
-Se generó además una copia posterior al despliegue con el lanzador instalado, a las 23:43, en `J:\Trabajo\Estudio Ariteda\Sistema\Copias de seguirdad\Manuales\2026-10-16T02-43-36.435Z-de81fb2f-ee15-488b-ac6f-003195a5bd9b`. Se verificaron independientemente sus 52 hashes y los 16 objetos de Storage. Conserva la base con la migración aplicada y el estado del proyecto local. Para restaurar exactamente la aplicación publicada debe usarse el commit de aplicación indicado arriba: el respaldo local también preserva trabajo previo del titular que no se publicó.
+Se generó además una copia posterior al despliegue con el lanzador instalado, a las 23:43, en `J:\Trabajo\Estudio Ariteda\Sistema\Copias de seguirdad\Manuales\2026-10-16T02-43-36.435Z-de81fb2f-ee15-488b-ac6f-003195a5bd9b`. Se verificaron independientemente sus 52 hashes y los 16 objetos de Storage. Conserva la base con la migración aplicada y el historial Git disponible durante la copia; no incluye archivos locales sin commit. Para restaurar exactamente la aplicación publicada debe usarse el commit de aplicación indicado arriba: otras referencias locales incluyen trabajo previo del titular que no se publicó. El runbook distingue ahora el archivo nativo de las copias SQL anteriores y los límites del ensayo local.
 
 No hubo transacciones comerciales ni correos reales de prueba. La comprobación pública posterior no sustituye un recorrido autenticado completo con usuarios reales. GitHub no estaba autenticado: la publicación se hizo con la sesión existente de Vercel y el commit se conserva localmente, sin push ni PR.
