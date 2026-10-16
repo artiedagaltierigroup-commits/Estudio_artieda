@@ -107,6 +107,12 @@ export async function getCase(id: string) {
 
   if (!currentCase || currentCase.client.userId !== userId) return null;
 
+  const memberRows = await db.query.workspaceMembers.findMany({
+    columns: { userId: true, displayName: true },
+    where: (member, { eq }) => eq(member.ownerUserId, userId),
+  });
+  const memberNames = new Map(memberRows.map(member => [member.userId, member.displayName]));
+
   const signatureRows = await db.query.signatureRequests.findMany({
     where: (item, { and: andOperator, eq: eqOperator }) =>
       andOperator(eqOperator(item.userId, userId), eqOperator(item.caseId, id)),
@@ -161,6 +167,11 @@ export async function getCase(id: string) {
 
   return {
     ...currentCase,
+    reminders: currentCase.reminders.map(reminder => ({
+      ...reminder,
+      assigneeName: reminder.assigneeUserId ? (memberNames.get(reminder.assigneeUserId) ?? "Asistente legal") : (memberNames.get(userId) ?? "Victoria"),
+      creatorName: reminder.createdByUserId ? (memberNames.get(reminder.createdByUserId) ?? "Usuario anterior") : "Usuario anterior",
+    })),
     financeSummary,
     paymentTimeline,
     chargesWithDerivedStatus,

@@ -6,6 +6,7 @@ import type { WorkspaceRole } from "./workspace-permissions";
 export interface WorkspaceAccess {
   actorUserId: string;
   ownerUserId: string;
+  displayName: string;
   role: WorkspaceRole;
   email?: string;
 }
@@ -29,7 +30,7 @@ export async function getWorkspaceAccess(): Promise<WorkspaceAccess> {
   const member = await db.query.workspaceMembers.findFirst({
     where: (row, { eq }) => eq(row.userId, user.id),
   });
-  if (!member?.enabled || member.userId !== user.id || !member.ownerUserId ||
+  if (!member?.enabled || member.userId !== user.id || !member.ownerUserId || !member.displayName?.trim() ||
       (member.role !== "ADMIN" && member.role !== "COLLABORATOR")) {
     throw new WorkspaceAccessError("ACCESS_DENIED");
   }
@@ -43,7 +44,7 @@ export async function getWorkspaceAccess(): Promise<WorkspaceAccess> {
       throw new WorkspaceAccessError("ACCESS_DENIED");
     }
   }
-  return { actorUserId: user.id, ownerUserId: member.ownerUserId, role: member.role, email: user.email };
+  return { actorUserId: user.id, ownerUserId: member.ownerUserId, displayName: member.displayName.trim(), role: member.role, email: user.email };
 }
 
 export async function requireAdminAccess(): Promise<WorkspaceAccess> {

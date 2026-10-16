@@ -9,13 +9,13 @@ import { useMoneyVisibility } from "@/components/system/money-visibility-provide
 import { useWorkspaceRole } from "@/components/system/workspace-role-provider";
 
 interface HeaderProps {
-  email?: string;
+  displayName: string;
   sidebarCollapsed: boolean;
   onToggleSidebar: () => void;
   onOpenMobileNavigation: () => void;
 }
 
-export function Header({ email, sidebarCollapsed, onToggleSidebar, onOpenMobileNavigation }: HeaderProps) {
+export function Header({ displayName, sidebarCollapsed, onToggleSidebar, onOpenMobileNavigation }: HeaderProps) {
   const router = useRouter();
   const pathname = usePathname();
   const supabase = createClient();
@@ -53,7 +53,7 @@ export function Header({ email, sidebarCollapsed, onToggleSidebar, onOpenMobileN
         <p className="text-lg font-semibold text-foreground">{routeMeta.title}</p>
       </div>
       <div className="flex items-center gap-4">
-        {email && <span className="hidden text-sm text-muted-foreground sm:block">{email}</span>}
+        <span className="hidden text-sm font-medium text-muted-foreground sm:block">{displayName}</span>
         {role === "ADMIN" ? <button
           type="button"
           onClick={toggleMoneyVisibility}

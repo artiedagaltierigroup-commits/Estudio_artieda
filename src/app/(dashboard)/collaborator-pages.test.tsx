@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { renderToStaticMarkup } from "react-dom/server";
 import HomePage from "./page";
 import ClientsPage from "./clientes/page";
 import ClientPage from "./clientes/[id]/page";
@@ -10,22 +11,23 @@ import CalendarPage from "./calendario/page";
 import RemindersPage from "./recordatorios/page";
 
 const state = vi.hoisted(() => ({
+  role: "COLLABORATOR" as "ADMIN" | "COLLABORATOR",
   finance: vi.fn(() => { throw new Error("Financial reader reached by collaborator"); }),
   operationalClients: vi.fn(async () => []),
   operationalCase: vi.fn(async () => ({ id: "case-id", title: "Caso de prueba", clientId: "client-id" })),
 }));
 
-vi.mock("@/lib/workspace-access", () => ({ getWorkspaceAccess: async () => ({ actorUserId: "staff", ownerUserId: "owner", role: "COLLABORATOR" }) }));
+vi.mock("@/lib/workspace-access", () => ({ getWorkspaceAccess: async () => ({ actorUserId: state.role === "ADMIN" ? "owner" : "staff", ownerUserId: "owner", displayName: state.role === "ADMIN" ? "Victoria" : "Briza", role: state.role }) }));
 vi.mock("@/actions/dashboard", () => ({ getAnalyticsSnapshot: state.finance, getDashboardOverview: state.finance }));
 vi.mock("@/actions/clients", () => ({ getClients: state.finance, getClient: state.finance, createClientInlineAction: vi.fn() }));
 vi.mock("@/actions/cases", () => ({ getCases: state.finance, getCase: state.finance, getCaseRecord: state.finance, createCase: vi.fn(), updateCase: vi.fn() }));
 vi.mock("@/actions/calendar", () => ({ getCalendarEvents: state.finance }));
 vi.mock("@/actions/operational", () => ({ getOperationalClients: state.operationalClients, getOperationalCase: state.operationalCase, getOperationalCases: vi.fn(async () => []), getOperationalClient: vi.fn() }));
 vi.mock("@/actions/recurring-expense-occurrences", () => ({ getRecurringPayableChecklist: state.finance, getRecurringPayableAlerts: state.finance, markRecurringOccurrencePaid: vi.fn(), reopenRecurringOccurrence: vi.fn() }));
-vi.mock("@/actions/reminders", () => ({ getReminders: vi.fn(async () => []), getReminderReferences: vi.fn(async () => ({ clients: [], cases: [] })), createReminder: vi.fn(), completeReminder: vi.fn(), reopenReminder: vi.fn(), deleteReminder: vi.fn() }));
+vi.mock("@/actions/reminders", () => ({ getReminders: vi.fn(async () => []), getReminderReferences: vi.fn(async () => ({ clients: [], cases: [], assistants: [{ userId: "staff", displayName: "Briza" }] })), createReminder: vi.fn(), completeReminder: vi.fn(), reopenReminder: vi.fn(), deleteReminder: vi.fn() }));
 
 describe("collaborator page data boundaries", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => { vi.clearAllMocks(); state.role = "COLLABORATOR"; });
 
   it.each([
     ["home", () => HomePage()],
@@ -51,5 +53,20 @@ describe("collaborator page data boundaries", () => {
     expect(state.operationalCase).toHaveBeenCalledWith("case-id");
     expect(state.operationalClients).toHaveBeenCalledOnce();
     expect(state.finance).not.toHaveBeenCalled();
+  });
+
+  it("shows Briza her automatic assignment without a reassignment control", async () => {
+    const html = renderToStaticMarkup(await RemindersPage());
+    expect(html).toContain("Esta tarea quedará asignada a Briza");
+    expect(html).not.toContain('name="assigneeUserId"');
+  });
+
+  it("lets Victoria choose herself or Briza", async () => {
+    state.role = "ADMIN";
+    state.finance.mockResolvedValueOnce([] as never);
+    const html = renderToStaticMarkup(await RemindersPage());
+    expect(html).toContain('name="assigneeUserId"');
+    expect(html).toContain("Solo para Victoria");
+    expect(html).toContain("Briza");
   });
 });

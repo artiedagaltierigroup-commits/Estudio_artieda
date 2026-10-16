@@ -19,7 +19,7 @@ describe("workspace role presentation", () => {
   });
 
   it.each(["ADMIN", "COLLABORATOR"] as const)("only gives ADMIN the money visibility control (%s)", (role) => {
-    const html = renderToStaticMarkup(<WorkspaceRoleProvider role={role}><MoneyVisibilityProvider><Header sidebarCollapsed={false} onToggleSidebar={() => {}} onOpenMobileNavigation={() => {}} /></MoneyVisibilityProvider></WorkspaceRoleProvider>);
+    const html = renderToStaticMarkup(<WorkspaceRoleProvider role={role}><MoneyVisibilityProvider><Header displayName={role === "ADMIN" ? "Victoria" : "Briza"} sidebarCollapsed={false} onToggleSidebar={() => {}} onOpenMobileNavigation={() => {}} /></MoneyVisibilityProvider></WorkspaceRoleProvider>);
     expect(html.includes("Ocultar montos")).toBe(role === "ADMIN");
     expect(html).toContain("Cerrar sesion");
   });

@@ -16,7 +16,7 @@ import { formatDate, formatDateTime, getCaseStatusLabel, getPriorityLabel } from
 const rowClass = "flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-border/70 bg-white p-4";
 const selectClass = "h-11 rounded-2xl border border-input bg-background px-4 text-sm";
 
-type ReminderSummary = { id: string; title: string; description: string | null; reminderDate: Date; completed: boolean };
+type ReminderSummary = { id: string; title: string; description: string | null; reminderDate: Date; completed: boolean; assigneeName?: string; creatorName?: string };
 type CaseSummary = { id: string; title: string; status: string; priority: string };
 
 function CaseList({ cases }: { cases: CaseSummary[] }) {
@@ -31,10 +31,10 @@ function CaseList({ cases }: { cases: CaseSummary[] }) {
 function ReminderList({ reminders }: { reminders: ReminderSummary[] }) {
   return reminders.length ? <div className="space-y-3">{reminders.map((item) => (
     <Link key={item.id} href={`/recordatorios/${item.id}/editar`} className={rowClass}>
-      <div className="space-y-1"><p className="font-medium">{item.title}</p><p className="text-xs text-muted-foreground">{formatDateTime(item.reminderDate)}</p></div>
+      <div className="space-y-1"><p className="font-medium">{item.title}</p><p className="text-xs text-muted-foreground">{formatDateTime(item.reminderDate)}</p>{item.assigneeName ? <p className="text-xs text-muted-foreground">Asignada a: {item.assigneeName} · Creada por: {item.creatorName}</p> : null}</div>
       <StatusChip label={item.completed ? "Completado" : "Pendiente"} tone={item.completed ? "sage" : "amber"} />
     </Link>
-  ))}</div> : <p className="text-sm text-muted-foreground">No hay recordatorios para mostrar.</p>;
+  ))}</div> : <p className="text-sm text-muted-foreground">No hay tareas para mostrar.</p>;
 }
 
 export async function OperationalHome() {
@@ -51,7 +51,7 @@ export async function OperationalHome() {
     <div className="flex flex-wrap gap-3">
       <Button asChild><Link href="/casos/nuevo"><Plus className="h-4 w-4" />Nuevo caso</Link></Button>
       <Button asChild variant="outline"><Link href="/clientes/nuevo"><Users className="h-4 w-4" />Nuevo cliente</Link></Button>
-      <Button asChild variant="outline"><Link href="/recordatorios"><Bell className="h-4 w-4" />Tareas y recordatorios</Link></Button>
+      <Button asChild variant="outline"><Link href="/recordatorios"><Bell className="h-4 w-4" />Tareas</Link></Button>
     </div>
     <SectionCard title="Tareas pendientes" actions={<Link href="/recordatorios" className="text-sm text-primary hover:underline">Ver todas</Link>}><ReminderList reminders={pending} /></SectionCard>
     <SectionCard title="Casos activos"><CaseList cases={cases.filter((item) => item.status === "ACTIVE").slice(0, 8)} /></SectionCard>
@@ -75,11 +75,11 @@ export async function OperationalClientPage({ id }: { id: string }) {
   if (!client) notFound();
   const contact = [{ label: "Email", value: client.email }, { label: "Teléfono", value: client.phone }, { label: "Dirección", value: client.address }, { label: "Idiomas", value: client.languages }, { label: "Identificación", value: client.taxId }];
   return <div className="space-y-6">
-    <PageHeader eyebrow="Ficha del cliente" title={client.name} description="Contacto, expedientes y recordatorios compartidos." actions={<><Button asChild variant="outline"><Link href="/clientes">Volver</Link></Button><Button asChild><Link href={`/clientes/${id}/editar`}><PencilLine className="h-4 w-4" />Editar cliente</Link></Button></>} />
+    <PageHeader eyebrow="Ficha del cliente" title={client.name} description="Contacto, expedientes y tareas compartidas." actions={<><Button asChild variant="outline"><Link href="/clientes">Volver</Link></Button><Button asChild><Link href={`/clientes/${id}/editar`}><PencilLine className="h-4 w-4" />Editar cliente</Link></Button></>} />
     <SectionCard title="Datos de contacto"><dl className="grid gap-4 sm:grid-cols-2">{contact.map((item) => <div key={item.label}><dt className="text-xs text-muted-foreground">{item.label}</dt><dd className="mt-1 break-words text-sm">{item.value || "Sin registrar"}</dd></div>)}</dl></SectionCard>
     {client.notes ? <SectionCard title="Notas internas"><p className="whitespace-pre-wrap break-words text-sm">{client.notes}</p></SectionCard> : null}
     <SectionCard title="Casos" actions={<Button asChild variant="outline"><Link href={`/casos/nuevo?clientId=${id}`}><Plus className="h-4 w-4" />Nuevo caso</Link></Button>}><CaseList cases={client.cases} /></SectionCard>
-    <SectionCard title="Recordatorios"><ReminderList reminders={client.reminders} /></SectionCard>
+    <SectionCard title="Tareas"><ReminderList reminders={client.reminders} /></SectionCard>
     <Button asChild variant="outline"><Link href={`/firmas/nueva?clientId=${id}`}>Nueva solicitud de firma</Link></Button>
   </div>;
 }
@@ -105,7 +105,7 @@ export async function OperationalCasePage({ id }: { id: string }) {
       { label: "Inicio", value: formatDate(item.startDate) }, { label: "Cierre", value: formatDate(item.endDate) },
     ]} actions={<><Button asChild variant="outline"><Link href="/casos">Volver</Link></Button><Button asChild><Link href={`/casos/${id}/editar`}><PencilLine className="h-4 w-4" />Editar caso</Link></Button></>} />
     <SectionCard title="Contexto del caso"><p className="whitespace-pre-wrap break-words text-sm">{item.description || "Sin descripción registrada."}</p>{item.client ? <Link href={`/clientes/${item.client.id}`} className="mt-4 inline-block text-sm text-primary hover:underline">Ver ficha de {item.client.name}</Link> : null}</SectionCard>
-    <SectionCard title="Recordatorios"><ReminderList reminders={item.reminders} /></SectionCard>
+    <SectionCard title="Tareas"><ReminderList reminders={item.reminders} /></SectionCard>
     <Button asChild variant="outline"><Link href={`/firmas/nueva?clientId=${item.clientId}&caseId=${id}`}>Nueva solicitud de firma</Link></Button>
   </div>;
 }
@@ -116,7 +116,7 @@ export function OperationalHelp() {
     {[
       { title: "Clientes", href: "/clientes", text: "Consultá y actualizá los datos de contacto y las notas internas. Creá un cliente antes de abrir su primer caso." },
       { title: "Casos", href: "/casos", text: "Buscá expedientes por nombre o estado. Podés crear casos y editar su cliente, descripción, prioridad y fechas." },
-      { title: "Tareas y recordatorios", href: "/recordatorios", text: "Registrá tareas generales o vinculadas a un cliente o caso. Editalas, marcalas como resueltas o reabrilas cuando haga falta. El calendario muestra sus fechas." },
+      { title: "Tareas", href: "/recordatorios", text: "Registrá tareas generales o vinculadas a un cliente o caso. Editalas, marcalas como resueltas o reabrilas cuando haga falta. El calendario muestra sus fechas." },
       { title: "Firmas", href: "/firmas", text: "Prepará solicitudes, revisá su estado y accedé a los documentos del estudio desde el centro de firmas." },
     ].map((item) => <SectionCard key={item.href} title={item.title} actions={<Link href={item.href} className="text-sm text-primary hover:underline">Abrir módulo</Link>}><p className="text-sm leading-6 text-muted-foreground">{item.text}</p></SectionCard>)}
   </div>;

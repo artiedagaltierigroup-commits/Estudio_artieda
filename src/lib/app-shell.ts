@@ -73,8 +73,8 @@ export const dashboardNavigation: DashboardNavItem[] = [
   },
   {
     href: "/recordatorios",
-    label: "Recordatorios",
-    description: "Alertas internas y tareas pendientes",
+    label: "Tareas",
+    description: "Asignaciones y seguimiento del estudio",
     icon: Bell,
   },
   {

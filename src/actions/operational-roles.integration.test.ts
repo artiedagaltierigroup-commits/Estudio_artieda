@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { Sql } from "postgres";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "@/db";
-import { cases, clients, reminders } from "@/db/schema";
+import { cases, clients, reminders, workspaceMembers } from "@/db/schema";
 import { createCase, getCase, updateCase, updateCaseStatus } from "./cases";
 import { createClientAction, createClientInlineAction, deleteClient, getClient, getClientRecord, updateClient } from "./clients";
 import { getOperationalCase, getOperationalCases, getOperationalClient, getOperationalClients } from "./operational";
@@ -14,7 +14,7 @@ const state = vi.hoisted(() => ({
 }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/lib/workspace-access", () => ({
-  getWorkspaceAccess: async () => ({ actorUserId: state.actor, ownerUserId: state.owner, role: state.role }),
+  getWorkspaceAccess: async () => ({ actorUserId: state.actor, ownerUserId: state.owner, displayName: state.role === "ADMIN" ? "Victoria" : "Briza", role: state.role }),
   requireAdminAccess: async () => {
     if (state.role !== "ADMIN") throw new Error("Acceso denegado");
     return { actorUserId: state.actor, ownerUserId: state.owner, role: state.role };
@@ -50,7 +50,16 @@ describe.skipIf(!localUrl)("shared operational actions against a real isolated d
     state.owner = owner;
     state.role = "COLLABORATOR";
     // Dedicated synthetic database only; never run on a production clone.
-    await state.connection!.unsafe("TRUNCATE public.clients, public.reminders, public.activity_log CASCADE");
+    await state.connection!.unsafe("TRUNCATE app_private.workspace_members, public.clients, public.reminders, public.activity_log CASCADE");
+    await state.connection!.unsafe(
+      "insert into auth.users(id,email) values ($1,$2),($3,$4),($5,$6) on conflict (id) do update set email=excluded.email",
+      [owner, "victoria@example.test", collaborator, "briza@example.test", outsider, "outsider@example.test"],
+    );
+    await db.insert(workspaceMembers).values([
+      { userId: owner, ownerUserId: owner, displayName: "Victoria", role: "ADMIN" },
+      { userId: collaborator, ownerUserId: owner, displayName: "Briza", role: "COLLABORATOR" },
+      { userId: outsider, ownerUserId: outsider, displayName: "Otra persona", role: "ADMIN" },
+    ]);
     await db.insert(clients).values([
       { id: clientId, userId: owner, name: "Cliente compartido", notes: "Texto existente con importe 500" },
       { id: otherClientId, userId: outsider, name: "Cliente ajeno" },
@@ -60,8 +69,8 @@ describe.skipIf(!localUrl)("shared operational actions against a real isolated d
       { id: otherCaseId, userId: outsider, clientId: otherClientId, title: "Caso ajeno", fee: "123.45" },
     ]);
     await db.insert(reminders).values([
-      { id: reminderId, userId: owner, clientId, caseId, title: "Recordatorio compartido 500", reminderDate: new Date("2099-01-01T12:00:00Z") },
-      { id: otherReminderId, userId: outsider, clientId: otherClientId, caseId: otherCaseId, title: "Recordatorio ajeno", reminderDate: new Date("2099-01-01T12:00:00Z") },
+      { id: reminderId, userId: owner, createdByUserId: owner, assigneeUserId: collaborator, clientId, caseId, title: "Recordatorio compartido 500", reminderDate: new Date("2099-01-01T12:00:00Z") },
+      { id: otherReminderId, userId: outsider, createdByUserId: outsider, clientId: otherClientId, caseId: otherCaseId, title: "Recordatorio ajeno", reminderDate: new Date("2099-01-01T12:00:00Z") },
     ]);
   });
   afterAll(async () => { await state.connection?.end(); });
@@ -145,8 +154,12 @@ describe.skipIf(!localUrl)("shared operational actions against a real isolated d
     state.actor = owner;
     state.role = "ADMIN";
     expect(await updateCase(caseId, form({ clientId, title: "Caso dueña", fee: "111.11", preferredPaymentMethod: "TRANSFER" }))).toHaveProperty("success", true);
-    expect(await getCase(caseId)).toHaveProperty("fee", "111.11");
-    expect(await getClient(clientId)).toHaveProperty("financeSummary");
+    const caseDetail = await getCase(caseId);
+    const clientDetail = await getClient(clientId);
+    expect(caseDetail).toHaveProperty("fee", "111.11");
+    expect(clientDetail).toHaveProperty("financeSummary");
+    expect(caseDetail?.reminders[0]).toMatchObject({ assigneeName: "Briza", creatorName: "Victoria" });
+    expect(clientDetail?.reminders[0]).toMatchObject({ assigneeName: "Briza", creatorName: "Victoria" });
     expect(await deleteReminder(reminderId)).toHaveProperty("success", true);
     expect(await deleteClient(clientId)).toHaveProperty("success", true);
     expect(await db.query.clients.findMany()).toHaveLength(1);

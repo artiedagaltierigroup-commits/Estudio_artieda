@@ -36,7 +36,7 @@ describe("operational pages", () => {
   });
   it("limits help content to shared workflows", () => {
     const html = renderToStaticMarkup(<OperationalHelp />);
-    expect(html).toContain("Tareas y recordatorios");
+    expect(html).toContain("Tareas");
     expect(html).not.toMatch(/cobros|gastos|ahorros|estadisticas|historial/i);
   });
 });

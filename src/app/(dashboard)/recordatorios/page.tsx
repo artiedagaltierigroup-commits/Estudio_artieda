@@ -91,8 +91,8 @@ export default async function RecordatoriosPage() {
     <div className="space-y-6">
       <PageHeader
         eyebrow="Seguimiento"
-        title="Recordatorios"
-        description="Panel operativo para alertas manuales y tareas pendientes ligadas a clientes, casos o trabajo general."
+        title="Tareas"
+        description="Panel de tareas pendientes ligadas a clientes, casos o trabajo general."
         stats={[
           { label: "Pendientes", value: `${summary.pending}` },
           { label: "Vencidos", value: `${summary.overdue}` },
@@ -135,7 +135,7 @@ export default async function RecordatoriosPage() {
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.25fr)_340px]">
         <SectionCard
           eyebrow="Alta rapida"
-          title="Nuevo recordatorio"
+          title="Nueva tarea"
           description="Puede ser general, ligado a un cliente o asociado a un caso puntual."
         >
           <form action={handleCreate} className="space-y-4">
@@ -148,6 +148,21 @@ export default async function RecordatoriosPage() {
                 <Label htmlFor="reminderDate">Fecha y hora</Label>
                 <Input id="reminderDate" name="reminderDate" type="datetime-local" required />
               </div>
+              {access.role === "ADMIN" ? (
+                <div className="space-y-2 sm:col-span-2">
+                  <Label htmlFor="assigneeUserId">Asignar a</Label>
+                  <select id="assigneeUserId" name="assigneeUserId" className={selectClassName} defaultValue="">
+                    <option value="">Solo para {access.displayName}</option>
+                    {references.assistants.map((assistant) => (
+                      <option key={assistant.userId} value={assistant.userId}>{assistant.displayName}</option>
+                    ))}
+                  </select>
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-border/70 bg-muted/30 px-4 py-3 text-sm text-muted-foreground sm:col-span-2">
+                  Esta tarea quedará asignada a {access.displayName} y también será visible para Victoria.
+                </div>
+              )}
               <div className="space-y-2">
                 <Label htmlFor="priority">Prioridad</Label>
                 <select id="priority" name="priority" className={selectClassName}>
@@ -191,7 +206,7 @@ export default async function RecordatoriosPage() {
             <div className="flex justify-end">
               <SubmitButton>
                 <Plus className="h-4 w-4" />
-                Guardar recordatorio
+                Guardar tarea
               </SubmitButton>
             </div>
           </form>
@@ -204,7 +219,7 @@ export default async function RecordatoriosPage() {
           contentClassName="space-y-3"
         >
           <div className="rounded-[24px] border border-border/70 bg-white/80 p-4 text-sm leading-6 text-muted-foreground">
-            Un recordatorio puede ser general, por cliente o por caso. Si no esta ligado a nada, igual sigue siendo operativo.
+            Una tarea puede ser general, por cliente o por caso. Si no está ligada a nada, igual sigue siendo operativa.
           </div>
           <div className="rounded-[24px] border border-border/70 bg-white/80 p-4 text-sm leading-6 text-muted-foreground">
             Los vencidos suben arriba, despues se ordena por fecha y prioridad para que la lista sirva como bandeja diaria.
@@ -215,7 +230,7 @@ export default async function RecordatoriosPage() {
       {pending.length === 0 ? (
         <EmptyState
           icon={Bell}
-          title="No hay recordatorios pendientes"
+          title="No hay tareas pendientes"
           description="Cuando registres alertas internas, esta vista te va a mostrar prioridad, fecha y contexto relacionado."
         />
       ) : (
@@ -248,6 +263,8 @@ export default async function RecordatoriosPage() {
                         {formatDateTime(item.reminderDate)}
                       </span>
                       <span className="rounded-full border border-border/80 bg-background px-3 py-1">{relatedLabel}</span>
+                      <span className="rounded-full border border-border/80 bg-background px-3 py-1">Asignada a: {item.assigneeName}</span>
+                      <span className="rounded-full border border-border/80 bg-background px-3 py-1">Creada por: {item.creatorName}</span>
                     </div>
                     <div className="flex flex-wrap gap-2 pt-1 text-xs">
                       {item.clientId ? (
@@ -289,7 +306,7 @@ export default async function RecordatoriosPage() {
       {done.length > 0 ? (
         <SectionCard
           eyebrow="Resueltos"
-          title="Recordatorios completados"
+          title="Tareas completadas"
           description="Historial reciente de tareas ya cerradas, con opcion de reabrir si hizo falta."
           contentClassName="space-y-3"
         >
@@ -303,6 +320,7 @@ export default async function RecordatoriosPage() {
                 <div>
                   <p className="text-sm font-medium text-foreground line-through">{item.title}</p>
                   <p className="text-xs text-muted-foreground">{formatDateTime(item.reminderDate)}</p>
+                  <p className="text-xs text-muted-foreground">Asignada a: {item.assigneeName} · Creada por: {item.creatorName}</p>
                 </div>
               </div>
               <div className="flex flex-wrap gap-2">

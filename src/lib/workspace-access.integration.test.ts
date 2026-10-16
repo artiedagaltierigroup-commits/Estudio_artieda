@@ -31,7 +31,7 @@ describe.skipIf(!process.env.ROLES_TEST_DATABASE_URL)("current memberships and d
   beforeAll(async () => {
     sql = state.sql!;
     await sql`insert into auth.users (id,email) values (${owner},'owner@example.test'),(${staff},'staff@example.test'),(${outsider},'other@example.test'),(${unknown},'unknown@example.test')`;
-    await sql`insert into app_private.workspace_members (user_id,owner_user_id,role) values (${owner},${owner},'ADMIN'),(${staff},${owner},'COLLABORATOR'),(${outsider},${outsider},'ADMIN')`;
+    await sql`insert into app_private.workspace_members (user_id,owner_user_id,display_name,role) values (${owner},${owner},'Victoria','ADMIN'),(${staff},${owner},'Briza','COLLABORATOR'),(${outsider},${outsider},'Otra persona','ADMIN')`;
     await sql`insert into clients (id,user_id,name) values (${client},${owner},'Synthetic office'),(${legacyStaffClient},${staff},'Legacy staff personal row')`;
     await sql`insert into cases (id,user_id,client_id,title,fee,preferred_payment_method) values (${currentCase},${owner},${client},'Synthetic case','1234.56','TRANSFER')`;
     await sql.unsafe("DROP POLICY IF EXISTS roles_test_storage_owner ON storage.objects; CREATE POLICY roles_test_storage_owner ON storage.objects TO authenticated USING (split_part(name,'/',1)=(select auth.uid())::text) WITH CHECK (split_part(name,'/',1)=(select auth.uid())::text)");

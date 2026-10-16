@@ -11,11 +11,11 @@ const STORAGE_KEY = "estudio-artieda-sidebar-collapsed";
 
 export function DashboardShell({
   children,
-  email,
+  displayName,
   role,
 }: {
   children: ReactNode;
-  email?: string;
+  displayName: string;
   role: WorkspaceRole;
 }) {
   const [collapsed, setCollapsed] = useState(false);
@@ -48,7 +48,7 @@ export function DashboardShell({
           />
           <div className="flex flex-1 flex-col overflow-hidden">
             <Header
-              email={email}
+              displayName={displayName}
               onOpenMobileNavigation={() => setMobileNavigationOpen(true)}
               onToggleSidebar={handleToggleSidebar}
               sidebarCollapsed={collapsed}

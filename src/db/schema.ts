@@ -106,6 +106,7 @@ export const appPrivate = pgSchema("app_private");
 export const workspaceMembers = appPrivate.table("workspace_members", {
   userId: uuid("user_id").primaryKey(),
   ownerUserId: uuid("owner_user_id").notNull(),
+  displayName: text("display_name").notNull(),
   role: text("role").$type<"ADMIN" | "COLLABORATOR">().notNull(),
   enabled: boolean("enabled").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
@@ -371,6 +372,8 @@ export const reminders = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     userId: uuid("user_id").notNull(),
+    createdByUserId: uuid("created_by_user_id").references(() => workspaceMembers.userId, { onDelete: "set null" }),
+    assigneeUserId: uuid("assignee_user_id").references(() => workspaceMembers.userId, { onDelete: "set null" }),
     caseId: uuid("case_id").references(() => cases.id, { onDelete: "set null" }),
     clientId: uuid("client_id").references(() => clients.id, { onDelete: "set null" }),
     title: text("title").notNull(),
@@ -384,6 +387,7 @@ export const reminders = pgTable(
   },
   (table) => ({
     userIdIdx: index("reminders_user_id_idx").on(table.userId),
+    assigneeIdx: index("reminders_user_assignee_idx").on(table.userId, table.assigneeUserId),
     reminderDateIdx: index("reminders_date_idx").on(table.userId, table.reminderDate),
     completionIdx: index("reminders_completion_idx").on(table.userId, table.completed),
     caseIdx: index("reminders_case_idx").on(table.userId, table.caseId),

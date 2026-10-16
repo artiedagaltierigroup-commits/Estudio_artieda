@@ -12,7 +12,8 @@ export const operationalCaseColumns = {
   createdAt: true, updatedAt: true,
 } as const;
 export const operationalReminderColumns = {
-  id: true, userId: true, caseId: true, clientId: true, title: true,
+  id: true, userId: true, createdByUserId: true, assigneeUserId: true,
+  caseId: true, clientId: true, title: true,
   description: true, reminderDate: true, priority: true, completed: true,
   completedAt: true, createdAt: true, updatedAt: true,
 } as const;

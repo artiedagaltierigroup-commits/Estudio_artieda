@@ -463,6 +463,12 @@ export default async function ClienteDetailPage({ params }: { params: Promise<{ 
                     <span className="rounded-full border border-border/80 bg-background px-3 py-1">
                       Prioridad: {reminder.priority}
                     </span>
+                    <span className="rounded-full border border-border/80 bg-background px-3 py-1">
+                      Asignada a: {reminder.assigneeName}
+                    </span>
+                    <span className="rounded-full border border-border/80 bg-background px-3 py-1">
+                      Creada por: {reminder.creatorName}
+                    </span>
                   </div>
                 </li>
               ))}

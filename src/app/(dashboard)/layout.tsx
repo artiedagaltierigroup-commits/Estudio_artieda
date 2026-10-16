@@ -20,6 +20,6 @@ export default async function DashboardLayout({
   }
 
   return (
-    <DashboardShell email={access.email} role={access.role}>{children}</DashboardShell>
+    <DashboardShell displayName={access.displayName} role={access.role}>{children}</DashboardShell>
   );
 }
