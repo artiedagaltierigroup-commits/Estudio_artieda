@@ -48,6 +48,8 @@ Docker no fue reparado ni es necesario para este respaldo. No se modificaron ser
 
 La migración 0013 añade únicamente `CANCELLED` al tipo de estado de ocurrencias. Se ensayó sobre la copia restaurada: las huellas de todas las tablas comerciales permanecieron iguales. No contiene actualizaciones ni borrados de registros del negocio. La reversión prevista consiste en volver a la versión anterior de la aplicación y conservar el nuevo valor aditivo sin uso; no eliminar datos ni reconstruir el tipo.
 
+Las siguientes migraciones deben generarse y revisarse antes de aplicar SQL. No usar sincronización directa del esquema (`drizzle-kit push`) sobre producción: las políticas de acceso administradas mediante SQL también deben preservarse y comprobarse.
+
 ## Verificación de la entrega
 
 - Aplicación preparada para publicación: **366/366 pruebas**, ninguna fallida ni omitida; PostgreSQL real en cuatro bases locales dedicadas, datos sintéticos, correo y Storage simulados.
@@ -71,4 +73,17 @@ Tras actualizar, las pestañas que conserven los formularios anteriores pueden p
 
 ## Registro de publicación
 
-Aplicación y migración preparadas y verificadas. Completar este apartado con el resultado efectivo del despliegue y los controles posteriores; hasta entonces no acredita que estas correcciones estén activas en la web.
+Publicado en [estudio-artieda.vercel.app](https://estudio-artieda.vercel.app) el 15/10/2026 a las 23:39 aproximadamente, horario de Argentina. Vercel confirmó estado READY y asignación del dominio de producción.
+
+- Commit de aplicación: `eafc4af50e9380336d09870fdf8e568422dbe208`, rama `codex/stabilize-production`.
+- Despliegue: `dpl_BS2PrwNHoceFbQiNPzz9yMnzb1At`.
+- Migración 0013 aplicada y verificada a las 23:36; SHA-256 `16f4ecef230d2a469cfdc2035b20debec307f74dd0a2120e56fd18fd5d5794c0`. Cero sentencias de modificación de registros comerciales.
+- Dirección configurada para enlaces: `https://estudio-artieda.vercel.app`, según la dirección confirmada por el titular. Se preservaron las otras variables del proyecto.
+- Verificación posterior a las 23:41: login HTTP 200, sin errores de consola; ambos cron sin credencial devuelven 401; enlace ficticio de firma muestra el aviso de enlace inválido; las cinco tablas devuelven 401 anónimo y 200 al servidor mediante HEAD sin descargar filas.
+- Referencia de reversión conservada: `dpl_HdSjMn1aPrEjhAvLh3zgQjG8b1L4`, commit `8eb56384f69f92cd36aba665ddcbd68f428bb041`. Volver a esa aplicación no revierte los datos ni la migración aditiva.
+
+La primera comprobación administrativa usó la variable local alternativa de Supabase y recibió 401. Al usar la misma prioridad de claves que la aplicación (`SUPABASE_SERVICE_ROLE_KEY` antes que `SUPABASE_SECRET_KEY`), los cinco controles respondieron 200. No se cambiaron claves del sistema para esta comprobación.
+
+Se generó además una copia posterior al despliegue con el lanzador instalado, a las 23:43, en `J:\Trabajo\Estudio Ariteda\Sistema\Copias de seguirdad\Manuales\2026-10-16T02-43-36.435Z-de81fb2f-ee15-488b-ac6f-003195a5bd9b`. Se verificaron independientemente sus 52 hashes y los 16 objetos de Storage. Conserva la base con la migración aplicada y el estado del proyecto local. Para restaurar exactamente la aplicación publicada debe usarse el commit de aplicación indicado arriba: el respaldo local también preserva trabajo previo del titular que no se publicó.
+
+No hubo transacciones comerciales ni correos reales de prueba. La comprobación pública posterior no sustituye un recorrido autenticado completo con usuarios reales. GitHub no estaba autenticado: la publicación se hizo con la sesión existente de Vercel y el commit se conserva localmente, sin push ni PR.
