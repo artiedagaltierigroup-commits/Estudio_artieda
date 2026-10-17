@@ -21,7 +21,7 @@ vi.mock("@/lib/supabase/server", () => ({ createClient: async () => ({
   auth: { getUser: async () => ({ data: { user: { id: actor } } }) },
 }) }));
 vi.mock("@/lib/workspace-access", () => ({
-  getWorkspaceAccess: async () => ({ actorUserId: mocks.role === "ADMIN" ? owner : actor, ownerUserId: owner, displayName: mocks.role === "ADMIN" ? "Victoria" : "Briza", role: mocks.role }),
+  getWorkspaceAccess: async () => ({ actorUserId: mocks.role === "ADMIN" ? owner : actor, ownerUserId: owner, displayName: mocks.role === "ADMIN" ? "Victoria" : "Brisa", role: mocks.role }),
   requireAdminAccess: async () => {
     if (mocks.role !== "ADMIN") throw new Error("Acceso denegado");
     return { actorUserId: owner, ownerUserId: owner, role: mocks.role };
@@ -61,7 +61,7 @@ beforeEach(() => {
   mocks.caseMany.mockResolvedValue([]);
   mocks.reminderFirst.mockResolvedValue({ id: "reminder", userId: owner, assigneeUserId: actor, completed: false });
   mocks.reminderMany.mockResolvedValue([]);
-  mocks.workspaceMany.mockResolvedValue([{ userId: actor, displayName: "Briza" }, { userId: owner, displayName: "Victoria" }]);
+  mocks.workspaceMany.mockResolvedValue([{ userId: actor, displayName: "Brisa" }, { userId: owner, displayName: "Victoria" }]);
   mocks.insert.mockReturnValue({ values: mocks.values });
   mocks.values.mockReturnValue({ returning: mocks.returning });
   mocks.returning.mockResolvedValue([{ id: caseId }]);
@@ -157,7 +157,7 @@ describe("operational role boundaries", () => {
     expect((await getReminders())[0].creatorName).toBe("Usuario anterior");
   });
 
-  it("hides Victoria's private tasks from Briza and rejects direct mutations", async () => {
+  it("hides Victoria's private tasks from Brisa and rejects direct mutations", async () => {
     const privateReminder = { id: "private", userId: owner, createdByUserId: owner, assigneeUserId: null, title: "Solo Victoria", case: null, client: null, completed: false };
     mocks.reminderMany.mockResolvedValue([privateReminder]);
     mocks.reminderFirst.mockResolvedValue(privateReminder);
@@ -168,9 +168,9 @@ describe("operational role boundaries", () => {
     expect(mocks.update).not.toHaveBeenCalled();
   });
 
-  it("lets Victoria assign a task to Briza", async () => {
+  it("lets Victoria assign a task to Brisa", async () => {
     mocks.role = "ADMIN";
-    expect(await createReminder(form({ title: "Para Briza", reminderDate: "2099-01-01", assigneeUserId: actor }))).toHaveProperty("success", true);
+    expect(await createReminder(form({ title: "Para Brisa", reminderDate: "2099-01-01", assigneeUserId: actor }))).toHaveProperty("success", true);
     expect(mocks.values).toHaveBeenCalledWith(expect.objectContaining({ createdByUserId: owner, assigneeUserId: actor }));
   });
 
@@ -208,7 +208,7 @@ describe("operational role boundaries", () => {
       reminders: [{ id: "reminder", userId: owner, createdByUserId: owner, assigneeUserId: actor, title: "Seguimiento", description: null, reminderDate: new Date(), priority: "MEDIUM", completed: false, completedAt: null, createdAt: new Date(), updatedAt: new Date() }],
     });
     const result = await getOperationalClient(clientId);
-    expect(result?.reminders[0]).toMatchObject({ assigneeName: "Briza", creatorName: "Victoria" });
+    expect(result?.reminders[0]).toMatchObject({ assigneeName: "Brisa", creatorName: "Victoria" });
   });
 
   it("hides legacy cases linked to another office", async () => {

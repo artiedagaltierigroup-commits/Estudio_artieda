@@ -18,14 +18,14 @@ const state = vi.hoisted(() => ({
   operationalCase: vi.fn(async () => ({ id: "case-id", title: "Caso de prueba", clientId: "client-id" })),
 }));
 
-vi.mock("@/lib/workspace-access", () => ({ getWorkspaceAccess: async () => ({ actorUserId: state.role === "ADMIN" ? "owner" : "staff", ownerUserId: "owner", displayName: state.role === "ADMIN" ? "Victoria" : "Briza", role: state.role }) }));
+vi.mock("@/lib/workspace-access", () => ({ getWorkspaceAccess: async () => ({ actorUserId: state.role === "ADMIN" ? "owner" : "staff", ownerUserId: "owner", displayName: state.role === "ADMIN" ? "Victoria" : "Brisa", role: state.role }) }));
 vi.mock("@/actions/dashboard", () => ({ getAnalyticsSnapshot: state.finance, getDashboardOverview: state.finance }));
 vi.mock("@/actions/clients", () => ({ getClients: state.finance, getClient: state.finance, createClientInlineAction: vi.fn() }));
 vi.mock("@/actions/cases", () => ({ getCases: state.finance, getCase: state.finance, getCaseRecord: state.finance, createCase: vi.fn(), updateCase: vi.fn() }));
 vi.mock("@/actions/calendar", () => ({ getCalendarEvents: state.finance }));
 vi.mock("@/actions/operational", () => ({ getOperationalClients: state.operationalClients, getOperationalCase: state.operationalCase, getOperationalCases: vi.fn(async () => []), getOperationalClient: vi.fn() }));
 vi.mock("@/actions/recurring-expense-occurrences", () => ({ getRecurringPayableChecklist: state.finance, getRecurringPayableAlerts: state.finance, markRecurringOccurrencePaid: vi.fn(), reopenRecurringOccurrence: vi.fn() }));
-vi.mock("@/actions/reminders", () => ({ getReminders: vi.fn(async () => []), getReminderReferences: vi.fn(async () => ({ clients: [], cases: [], assistants: [{ userId: "staff", displayName: "Briza" }] })), createReminder: vi.fn(), completeReminder: vi.fn(), reopenReminder: vi.fn(), deleteReminder: vi.fn() }));
+vi.mock("@/actions/reminders", () => ({ getReminders: vi.fn(async () => []), getReminderReferences: vi.fn(async () => ({ clients: [], cases: [], assistants: [{ userId: "staff", displayName: "Brisa" }] })), createReminder: vi.fn(), completeReminder: vi.fn(), reopenReminder: vi.fn(), deleteReminder: vi.fn() }));
 
 describe("collaborator page data boundaries", () => {
   beforeEach(() => { vi.clearAllMocks(); state.role = "COLLABORATOR"; });
@@ -56,17 +56,17 @@ describe("collaborator page data boundaries", () => {
     expect(state.finance).not.toHaveBeenCalled();
   });
 
-  it("shows Briza her automatic assignment without a reassignment control", async () => {
-    const html = renderToStaticMarkup(<CreateReminderForm action={vi.fn()} role="COLLABORATOR" displayName="Briza" references={{ clients: [], cases: [], assistants: [{ userId: "staff", displayName: "Briza" }] }} />);
-    expect(html).toContain("Esta tarea quedará asignada a Briza");
+  it("shows Brisa her automatic assignment without a reassignment control", async () => {
+    const html = renderToStaticMarkup(<CreateReminderForm action={vi.fn()} role="COLLABORATOR" displayName="Brisa" references={{ clients: [], cases: [], assistants: [{ userId: "staff", displayName: "Brisa" }] }} />);
+    expect(html).toContain("Esta tarea quedará asignada a Brisa");
     expect(html).not.toContain('name="assigneeUserId"');
   });
 
-  it("lets Victoria choose herself or Briza", async () => {
-    const html = renderToStaticMarkup(<CreateReminderForm action={vi.fn()} role="ADMIN" displayName="Victoria" references={{ clients: [], cases: [], assistants: [{ userId: "staff", displayName: "Briza" }] }} />);
+  it("lets Victoria choose herself or Brisa", async () => {
+    const html = renderToStaticMarkup(<CreateReminderForm action={vi.fn()} role="ADMIN" displayName="Victoria" references={{ clients: [], cases: [], assistants: [{ userId: "staff", displayName: "Brisa" }] }} />);
     expect(html).toContain('name="assigneeUserId"');
     expect(html).toContain("Solo para Victoria");
-    expect(html).toContain("Briza");
+    expect(html).toContain("Brisa");
   });
 
   it("shows task creation in the header without the old fixed cards", async () => {

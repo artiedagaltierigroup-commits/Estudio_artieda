@@ -26,7 +26,7 @@ describe("reminder assignment", () => {
     expect(() => resolveReminderAssignee(victoria, "unknown-id", ["briza-id"])).toThrow("INVALID_ASSIGNEE");
   });
 
-  it("automatically assigns Briza's task to Briza", () => {
+  it("automatically assigns Brisa's task to Brisa", () => {
     expect(resolveReminderAssignee(briza, undefined, ["briza-id"])).toBe("briza-id");
   });
 
@@ -40,7 +40,7 @@ describe("reminder assignment", () => {
     expect(canAccessReminder(victoria, { userId: "victoria-id", assigneeUserId: "briza-id" })).toBe(true);
   });
 
-  it("only lets Briza see tasks assigned to Briza", () => {
+  it("only lets Brisa see tasks assigned to Brisa", () => {
     expect(canAccessReminder(briza, { userId: "victoria-id", assigneeUserId: "briza-id" })).toBe(true);
     expect(canAccessReminder(briza, { userId: "victoria-id", assigneeUserId: null })).toBe(false);
     expect(canAccessReminder(briza, { userId: "victoria-id", assigneeUserId: "other-id" })).toBe(false);

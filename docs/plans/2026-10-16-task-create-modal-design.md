@@ -25,7 +25,7 @@ El formulario se moverá a un componente cliente dedicado que controla la apertu
 
 ## Verificación
 
-- Prueba automatizada del contenido y los controles del diálogo para Victoria y Briza.
+- Prueba automatizada del contenido y los controles del diálogo para Victoria y Brisa.
 - Prueba de la página para confirmar que el botón está en el encabezado y que ya no aparecen los bloques fijos.
 - Comprobación manual en escritorio y celular.
 - Ejecución de pruebas, tipos, lint y compilación antes de desplegar.

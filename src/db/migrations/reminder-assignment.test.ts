@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 const migration = readFileSync(new URL("./0015_reminder_assignment.sql", import.meta.url), "utf8");
 
 describe("reminder assignment migration", () => {
-  it("fails closed unless Artieda has exactly one active assistant and that person is Briza", () => {
+  it("fails closed unless Artieda has exactly one active assistant and that person is Brisa", () => {
     expect(migration).toContain("active_assistant_count <> 1");
     expect(migration).toContain("legalesartieda@gmail.com");
     expect(migration).toContain("RAISE EXCEPTION");

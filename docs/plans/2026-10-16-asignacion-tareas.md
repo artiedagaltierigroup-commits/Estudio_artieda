@@ -4,7 +4,7 @@
 
 **Goal:** Permitir que Victoria conserve tareas privadas o las asigne a asistentes legales, mientras cada asistente sólo ve sus tareas y toda tarea creada por un asistente sigue visible para Victoria.
 
-**Architecture:** Extender la membresía privada con un nombre visible y los recordatorios con creador y responsable. Centralizar las reglas en un módulo puro y aplicarlas en todas las consultas y mutaciones del servidor; las pantallas sólo presentan las opciones que el servidor autoriza. Una migración Drizzle aditiva conserva los datos y asigna los recordatorios existentes a Briza.
+**Architecture:** Extender la membresía privada con un nombre visible y los recordatorios con creador y responsable. Centralizar las reglas en un módulo puro y aplicarlas en todas las consultas y mutaciones del servidor; las pantallas sólo presentan las opciones que el servidor autoriza. Una migración Drizzle aditiva conserva los datos y asigna los recordatorios existentes a Brisa.
 
 **Tech Stack:** Next.js 15, React 19, TypeScript, Drizzle ORM, PostgreSQL/Supabase, Zod, Vitest.
 
@@ -21,7 +21,7 @@
 Probar que:
 
 - Victoria puede elegir privado (`null`) o una membresía `COLLABORATOR` activa del mismo estudio.
-- Briza recibe siempre su propio UUID y no puede enviar `assigneeUserId`.
+- Brisa recibe siempre su propio UUID y no puede enviar `assigneeUserId`.
 - Un asistente no puede leer ni operar recordatorios asignados a otra persona.
 - Una membresía deshabilitada, de otro estudio o administradora no es un destino válido.
 
@@ -61,7 +61,7 @@ Comprobar estáticamente y contra PostgreSQL aislado que la migración:
 - agrega `display_name` a `app_private.workspace_members`;
 - agrega `created_by_user_id` y `assignee_user_id` a `public.reminders`;
 - registra claves foráneas seguras e índice `(user_id, assignee_user_id)`;
-- asigna Victoria y Briza por correo;
+- asigna Victoria y Brisa por correo;
 - conserva el número y contenido de recordatorios;
 - asigna los recordatorios existentes a la única asistente activa del estudio;
 - aborta si el estudio objetivo no tiene exactamente una asistente activa.
@@ -74,7 +74,7 @@ Expected: FAIL por ausencia de la migración/columnas.
 
 **Step 3: Implement the schema and migration**
 
-Agregar `displayName` no nulo a membresías, `createdByUserId` y `assigneeUserId` anulables a recordatorios, índices y relaciones necesarias. La migración rellena creador con la dueña y responsable con Briza para el estudio Artieda; otras cuentas conservan un nombre derivado de su correo y sus tareas quedan privadas para su dueña.
+Agregar `displayName` no nulo a membresías, `createdByUserId` y `assigneeUserId` anulables a recordatorios, índices y relaciones necesarias. La migración rellena creador con la dueña y responsable con Brisa para el estudio Artieda; otras cuentas conservan un nombre derivado de su correo y sus tareas quedan privadas para su dueña.
 
 **Step 4: Generate and review Drizzle metadata**
 
@@ -102,7 +102,7 @@ Commit: `feat: store task creators and assignees`.
 
 **Step 1: Write failing tests**
 
-Esperar que `getWorkspaceAccess()` devuelva `displayName`, que rechace nombres vacíos y mantenga la validación de Victoria/Briza desde membresías privadas.
+Esperar que `getWorkspaceAccess()` devuelva `displayName`, que rechace nombres vacíos y mantenga la validación de Victoria/Brisa desde membresías privadas.
 
 **Step 2: Verify RED**
 
@@ -130,7 +130,7 @@ Commit: `feat: expose protected workspace display names`.
 
 **Step 1: Write failing action tests**
 
-Cubrir creación privada/asignada por Victoria, autoasignación de Briza, rechazo de campos falsificados, lectura sólo de tareas asignadas, protección de editar/completar/reabrir y visibilidad total para Victoria. Incluir recordatorios anidados en clientes/casos y nombres `createdByName`/`assigneeName`.
+Cubrir creación privada/asignada por Victoria, autoasignación de Brisa, rechazo de campos falsificados, lectura sólo de tareas asignadas, protección de editar/completar/reabrir y visibilidad total para Victoria. Incluir recordatorios anidados en clientes/casos y nombres `createdByName`/`assigneeName`.
 
 **Step 2: Verify RED**
 
@@ -165,7 +165,7 @@ Commit: `feat: enforce per-person task visibility`.
 
 **Step 1: Write failing UI tests**
 
-Probar que Victoria ve “Solo para Victoria” y Briza como responsable; Briza no ve selector y sí el aviso de autoasignación; las tarjetas muestran “Asignada a” y “Creada por”; la interfaz usa “Asistente legal”, Victoria y Briza en lugar de “Administradora”.
+Probar que Victoria ve “Solo para Victoria” y Brisa como responsable; Brisa no ve selector y sí el aviso de autoasignación; las tarjetas muestran “Asignada a” y “Creada por”; la interfaz usa “Asistente legal”, Victoria y Brisa en lugar de “Administradora”.
 
 **Step 2: Verify RED**
 
@@ -175,7 +175,7 @@ Expected: FAIL porque los controles y etiquetas aún no existen.
 
 **Step 3: Implement UI**
 
-Agregar selector sólo para Victoria, texto informativo para Briza y etiquetas de creador/responsable en pendientes y resueltos. Mantener los campos y estilos actuales.
+Agregar selector sólo para Victoria, texto informativo para Brisa y etiquetas de creador/responsable en pendientes y resueltos. Mantener los campos y estilos actuales.
 
 **Step 4: Verify GREEN and commit**
 
@@ -209,7 +209,7 @@ Expected: exit 0 en los tres.
 
 **Step 4: Verify browser behavior**
 
-Con fixture sintético separado, comprobar Victoria y Briza en escritorio y móvil: creación, edición, visibilidad, calendario y URL manipulada. No usar datos reales para escrituras.
+Con fixture sintético separado, comprobar Victoria y Brisa en escritorio y móvil: creación, edición, visibilidad, calendario y URL manipulada. No usar datos reales para escrituras.
 
 **Step 5: Document and commit**
 
@@ -226,7 +226,7 @@ Usar el respaldo PostgreSQL nativo ya instalado. Verificar hashes, Storage, lect
 
 **Step 2: Rehearse exact migration on restored data**
 
-Comparar conteos y huellas antes/después, verificar nombres, creador/responsable y la visibilidad de Victoria/Briza.
+Comparar conteos y huellas antes/después, verificar nombres, creador/responsable y la visibilidad de Victoria/Brisa.
 
 **Step 3: Prepare production migration**
 
@@ -242,7 +242,7 @@ Publicar desde la rama limpia `codex/reminder-assignment` y confirmar estado `RE
 
 **Step 6: Verify production read-only behavior**
 
-Comprobar migración, cuatro membresías, nombres Victoria/Briza, asignación de recordatorios existentes, rutas públicas y bloqueo de tablas. No crear tareas reales ni enviar correos.
+Comprobar migración, cuatro membresías, nombres Victoria/Brisa, asignación de recordatorios existentes, rutas públicas y bloqueo de tablas. No crear tareas reales ni enviar correos.
 
 **Step 7: Run and verify post-release backup**
 

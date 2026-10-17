@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const state = vi.hoisted(() => ({
   user: { id: "actor", email: "staff@example.test", user_metadata: { role: "ADMIN" } } as any,
   error: null as unknown,
-  member: { userId: "actor", ownerUserId: "office", displayName: "Briza", role: "COLLABORATOR", enabled: true } as any,
+  member: { userId: "actor", ownerUserId: "office", displayName: "Brisa", role: "COLLABORATOR", enabled: true } as any,
   owner: { userId: "office", ownerUserId: "office", displayName: "Victoria", role: "ADMIN", enabled: true } as any,
   findFirst: vi.fn(),
 }));
@@ -16,14 +16,14 @@ import { getWorkspaceAccess, requireAdminAccess } from "./workspace-access";
 beforeEach(() => {
   state.user = { id: "actor", email: "staff@example.test", user_metadata: { role: "ADMIN" } };
   state.error = null;
-  state.member = { userId: "actor", ownerUserId: "office", displayName: "Briza", role: "COLLABORATOR", enabled: true };
+  state.member = { userId: "actor", ownerUserId: "office", displayName: "Brisa", role: "COLLABORATOR", enabled: true };
   state.owner = { userId: "office", ownerUserId: "office", displayName: "Victoria", role: "ADMIN", enabled: true };
   state.findFirst.mockReset().mockImplementationOnce(async () => state.member).mockImplementation(async () => state.owner);
 });
 
 describe("workspace access", () => {
   it("resolves shared office from protected membership, ignoring user metadata", async () => {
-    expect(await getWorkspaceAccess()).toEqual({ actorUserId: "actor", ownerUserId: "office", displayName: "Briza", role: "COLLABORATOR", email: "staff@example.test" });
+    expect(await getWorkspaceAccess()).toEqual({ actorUserId: "actor", ownerUserId: "office", displayName: "Brisa", role: "COLLABORATOR", email: "staff@example.test" });
   });
   it("keeps an administrator scoped to their own office", async () => {
     state.member = { userId: "actor", ownerUserId: "actor", displayName: "Victoria", role: "ADMIN", enabled: true };

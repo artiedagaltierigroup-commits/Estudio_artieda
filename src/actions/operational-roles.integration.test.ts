@@ -14,7 +14,7 @@ const state = vi.hoisted(() => ({
 }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/lib/workspace-access", () => ({
-  getWorkspaceAccess: async () => ({ actorUserId: state.actor, ownerUserId: state.owner, displayName: state.role === "ADMIN" ? "Victoria" : "Briza", role: state.role }),
+  getWorkspaceAccess: async () => ({ actorUserId: state.actor, ownerUserId: state.owner, displayName: state.role === "ADMIN" ? "Victoria" : "Brisa", role: state.role }),
   requireAdminAccess: async () => {
     if (state.role !== "ADMIN") throw new Error("Acceso denegado");
     return { actorUserId: state.actor, ownerUserId: state.owner, role: state.role };
@@ -57,7 +57,7 @@ describe.skipIf(!localUrl)("shared operational actions against a real isolated d
     );
     await db.insert(workspaceMembers).values([
       { userId: owner, ownerUserId: owner, displayName: "Victoria", role: "ADMIN" },
-      { userId: collaborator, ownerUserId: owner, displayName: "Briza", role: "COLLABORATOR" },
+      { userId: collaborator, ownerUserId: owner, displayName: "Brisa", role: "COLLABORATOR" },
       { userId: outsider, ownerUserId: outsider, displayName: "Otra persona", role: "ADMIN" },
     ]);
     await db.insert(clients).values([
@@ -158,8 +158,8 @@ describe.skipIf(!localUrl)("shared operational actions against a real isolated d
     const clientDetail = await getClient(clientId);
     expect(caseDetail).toHaveProperty("fee", "111.11");
     expect(clientDetail).toHaveProperty("financeSummary");
-    expect(caseDetail?.reminders[0]).toMatchObject({ assigneeName: "Briza", creatorName: "Victoria" });
-    expect(clientDetail?.reminders[0]).toMatchObject({ assigneeName: "Briza", creatorName: "Victoria" });
+    expect(caseDetail?.reminders[0]).toMatchObject({ assigneeName: "Brisa", creatorName: "Victoria" });
+    expect(clientDetail?.reminders[0]).toMatchObject({ assigneeName: "Brisa", creatorName: "Victoria" });
     expect(await deleteReminder(reminderId)).toHaveProperty("success", true);
     expect(await deleteClient(clientId)).toHaveProperty("success", true);
     expect(await db.query.clients.findMany()).toHaveLength(1);

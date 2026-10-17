@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { CreateReminderDialog, CreateReminderForm } from "./create-reminder-dialog";
 
 const references = {
-  assistants: [{ userId: "staff", displayName: "Briza" }],
+  assistants: [{ userId: "staff", displayName: "Brisa" }],
   clients: [{ id: "client", name: "Cliente Uno" }],
   cases: [{ id: "case", title: "Caso Uno", clientName: "Cliente Uno" }],
 };
@@ -24,7 +24,7 @@ describe("task creation dialog", () => {
       expect(html).toContain(`name="${field}"`);
     }
     expect(html).toContain("Solo para Victoria");
-    expect(html).toContain("Briza");
+    expect(html).toContain("Brisa");
     expect(html).toContain("Cancelar");
     expect(html).toContain("Guardar tarea");
   });
@@ -34,7 +34,7 @@ describe("task creation dialog", () => {
       <CreateReminderDialog
         action={vi.fn()}
         role="COLLABORATOR"
-        displayName="Briza"
+        displayName="Brisa"
         references={references}
       />
     );
