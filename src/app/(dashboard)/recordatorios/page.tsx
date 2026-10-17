@@ -18,14 +18,12 @@ import { PageHeader } from "@/components/system/page-header";
 import { SectionCard } from "@/components/system/section-card";
 import { StatusChip } from "@/components/system/status-chip";
 import { SubmitButton } from "@/components/system/submit-button";
+import { CreateReminderDialog } from "@/components/reminders/create-reminder-dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { getReminderPriorityTone } from "@/lib/module-presenters";
 import { sortRemindersForPanel, summarizeReminderPanel } from "@/lib/operations-insights";
 import { formatDate, formatDateTime, getPriorityLabel } from "@/lib/utils";
-import { Bell, CalendarCheck2, CheckCircle2, Clock3, PencilLine, Plus, RotateCcw, Trash2 } from "lucide-react";
+import { Bell, CalendarCheck2, CheckCircle2, Clock3, PencilLine, RotateCcw, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
@@ -71,9 +69,6 @@ async function handlePayRecurring(formData: FormData) {
   redirect("/recordatorios");
 }
 
-const selectClassName =
-  "flex h-11 w-full rounded-2xl border border-input bg-background px-4 py-2 text-sm text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
-
 export default async function RecordatoriosPage() {
   const access = await getWorkspaceAccess();
   const [list, references, recurringAlerts] = await Promise.all([
@@ -99,6 +94,14 @@ export default async function RecordatoriosPage() {
           { label: "Hoy", value: `${summary.dueToday}` },
           { label: "Resueltos", value: `${summary.completed}` },
         ]}
+        actions={
+          <CreateReminderDialog
+            action={handleCreate}
+            role={access.role}
+            displayName={access.displayName}
+            references={references}
+          />
+        }
       />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -130,101 +133,6 @@ export default async function RecordatoriosPage() {
           icon={CheckCircle2}
           tone="sage"
         />
-      </div>
-
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.25fr)_340px]">
-        <SectionCard
-          eyebrow="Alta rapida"
-          title="Nueva tarea"
-          description="Puede ser general, ligado a un cliente o asociado a un caso puntual."
-        >
-          <form action={handleCreate} className="space-y-4">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2 sm:col-span-2">
-                <Label htmlFor="title">Titulo</Label>
-                <Input id="title" name="title" required placeholder="Ejemplo: escribirle a cliente o revisar vencimiento" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="reminderDate">Fecha y hora</Label>
-                <Input id="reminderDate" name="reminderDate" type="datetime-local" required />
-              </div>
-              {access.role === "ADMIN" ? (
-                <div className="space-y-2 sm:col-span-2">
-                  <Label htmlFor="assigneeUserId">Asignar a</Label>
-                  <select id="assigneeUserId" name="assigneeUserId" className={selectClassName} defaultValue="">
-                    <option value="">Solo para {access.displayName}</option>
-                    {references.assistants.map((assistant) => (
-                      <option key={assistant.userId} value={assistant.userId}>{assistant.displayName}</option>
-                    ))}
-                  </select>
-                </div>
-              ) : (
-                <div className="rounded-2xl border border-border/70 bg-muted/30 px-4 py-3 text-sm text-muted-foreground sm:col-span-2">
-                  Esta tarea quedará asignada a {access.displayName} y también será visible para Victoria.
-                </div>
-              )}
-              <div className="space-y-2">
-                <Label htmlFor="priority">Prioridad</Label>
-                <select id="priority" name="priority" className={selectClassName}>
-                  <option value="LOW">Baja</option>
-                  <option value="MEDIUM">Media</option>
-                  <option value="HIGH">Alta</option>
-                </select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="clientId">Cliente opcional</Label>
-                <select id="clientId" name="clientId" className={selectClassName} defaultValue="">
-                  <option value="">General</option>
-                  {references.clients.map((client) => (
-                    <option key={client.id} value={client.id}>
-                      {client.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="caseId">Caso opcional</Label>
-                <select id="caseId" name="caseId" className={selectClassName} defaultValue="">
-                  <option value="">Sin caso asociado</option>
-                  {references.cases.map((currentCase) => (
-                    <option key={currentCase.id} value={currentCase.id}>
-                      {currentCase.clientName} - {currentCase.title}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="space-y-2 sm:col-span-2">
-                <Label htmlFor="description">Descripcion</Label>
-                <Textarea
-                  id="description"
-                  name="description"
-                  className="min-h-[110px]"
-                  placeholder="Contexto breve para recordar por que hay que hacer esta accion."
-                />
-              </div>
-            </div>
-            <div className="flex justify-end">
-              <SubmitButton>
-                <Plus className="h-4 w-4" />
-                Guardar tarea
-              </SubmitButton>
-            </div>
-          </form>
-        </SectionCard>
-
-        <SectionCard
-          eyebrow="Criterio"
-          title="Como leer el panel"
-          description="La idea es que la agenda diaria quede visible sin abrir clientes o casos a cada rato."
-          contentClassName="space-y-3"
-        >
-          <div className="rounded-[24px] border border-border/70 bg-white/80 p-4 text-sm leading-6 text-muted-foreground">
-            Una tarea puede ser general, por cliente o por caso. Si no está ligada a nada, igual sigue siendo operativa.
-          </div>
-          <div className="rounded-[24px] border border-border/70 bg-white/80 p-4 text-sm leading-6 text-muted-foreground">
-            Los vencidos suben arriba, despues se ordena por fecha y prioridad para que la lista sirva como bandeja diaria.
-          </div>
-        </SectionCard>
       </div>
 
       {pending.length === 0 ? (

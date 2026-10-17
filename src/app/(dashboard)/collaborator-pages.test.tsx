@@ -9,6 +9,7 @@ import NewCasePage from "./casos/nuevo/page";
 import EditCasePage from "./casos/[id]/editar/page";
 import CalendarPage from "./calendario/page";
 import RemindersPage from "./recordatorios/page";
+import { CreateReminderForm } from "@/components/reminders/create-reminder-dialog";
 
 const state = vi.hoisted(() => ({
   role: "COLLABORATOR" as "ADMIN" | "COLLABORATOR",
@@ -56,17 +57,22 @@ describe("collaborator page data boundaries", () => {
   });
 
   it("shows Briza her automatic assignment without a reassignment control", async () => {
-    const html = renderToStaticMarkup(await RemindersPage());
+    const html = renderToStaticMarkup(<CreateReminderForm action={vi.fn()} role="COLLABORATOR" displayName="Briza" references={{ clients: [], cases: [], assistants: [{ userId: "staff", displayName: "Briza" }] }} />);
     expect(html).toContain("Esta tarea quedará asignada a Briza");
     expect(html).not.toContain('name="assigneeUserId"');
   });
 
   it("lets Victoria choose herself or Briza", async () => {
-    state.role = "ADMIN";
-    state.finance.mockResolvedValueOnce([] as never);
-    const html = renderToStaticMarkup(await RemindersPage());
+    const html = renderToStaticMarkup(<CreateReminderForm action={vi.fn()} role="ADMIN" displayName="Victoria" references={{ clients: [], cases: [], assistants: [{ userId: "staff", displayName: "Briza" }] }} />);
     expect(html).toContain('name="assigneeUserId"');
     expect(html).toContain("Solo para Victoria");
     expect(html).toContain("Briza");
+  });
+
+  it("shows task creation in the header without the old fixed cards", async () => {
+    const html = renderToStaticMarkup(await RemindersPage());
+    expect(html).toContain("Nueva tarea");
+    expect(html).not.toContain("Alta rapida");
+    expect(html).not.toContain("Como leer el panel");
   });
 });
