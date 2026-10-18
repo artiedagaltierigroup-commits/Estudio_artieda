@@ -97,6 +97,34 @@ export function getRecurringOccurrenceStatus(input: {
   return "PENDING";
 }
 
+export interface ExistingRecurringOccurrence {
+  dueDate: string;
+  status: RecurringExpenseOccurrenceStatus;
+  expenseId: string | null;
+}
+
+export function listRecurringDatesNeedingSync(
+  recurring: RecurringOccurrenceDateInput,
+  occurrences: readonly ExistingRecurringOccurrence[],
+  range: { from: string; to: string; today: string },
+): string[] {
+  const byDate = new Map(occurrences.map((item) => [item.dueDate, item]));
+  const recordedMonths = new Set(occurrences.map((item) => item.dueDate.slice(0, 7)));
+
+  return listRecurringDueDates(recurring, range).filter((dueDate) => {
+    const status = getRecurringOccurrenceStatus({ mode: recurring.mode, dueDate, today: range.today });
+    if (recurring.mode === "AUTOMATIC" && status !== "GENERATED") return false;
+
+    const occurrence = byDate.get(dueDate);
+    // A former 31st-day schedule may have already settled this month on the 28th.
+    if (!occurrence) return !recordedMonths.has(dueDate.slice(0, 7));
+    if (occurrence.expenseId || occurrence.status === "GENERATED" ||
+        occurrence.status === "PAID" || occurrence.status === "CANCELLED") return false;
+
+    return recurring.mode === "AUTOMATIC" || occurrence.status !== status;
+  });
+}
+
 export function getReminderWindowStart(dueDate: string, notifyDaysBefore: number): string {
   return format(addDays(parseISO(dueDate), -notifyDaysBefore), "yyyy-MM-dd");
 }

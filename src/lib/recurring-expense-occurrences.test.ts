@@ -2,8 +2,55 @@ import { describe, expect, it } from "vitest";
 import {
   getReminderWindowStart,
   getRecurringOccurrenceStatus,
+  listRecurringDatesNeedingSync,
   listRecurringDueDates,
 } from "./recurring-expense-occurrences";
+
+const schedule = {
+  active: true,
+  mode: "PAYABLE" as const,
+  frequency: "monthly" as const,
+  startDate: "2026-01-15",
+  endDate: null,
+  payableDayOfMonth: 15,
+};
+
+describe("listRecurringDatesNeedingSync", () => {
+  const range = { from: "2026-01-15", to: "2026-03-31", today: "2026-03-20" };
+
+  it("does no database work when historical payable periods already have the right status", () => {
+    expect(listRecurringDatesNeedingSync(schedule, [
+      { dueDate: "2026-01-15", status: "OVERDUE", expenseId: null },
+      { dueDate: "2026-02-15", status: "PAID", expenseId: "payment" },
+      { dueDate: "2026-03-15", status: "OVERDUE", expenseId: null },
+    ], range)).toEqual([]);
+  });
+
+  it("selects missing periods and overdue status changes", () => {
+    expect(listRecurringDatesNeedingSync(schedule, [
+      { dueDate: "2026-01-15", status: "PENDING", expenseId: null },
+      { dueDate: "2026-02-15", status: "OVERDUE", expenseId: null },
+    ], range)).toEqual(["2026-01-15", "2026-03-15"]);
+  });
+
+  it("never regenerates settled automatic expenses or old periods with a shifted day", () => {
+    const automatic = { ...schedule, mode: "AUTOMATIC" as const, startDate: "2026-01-31", payableDayOfMonth: null };
+    expect(listRecurringDatesNeedingSync(automatic, [
+      { dueDate: "2026-01-31", status: "GENERATED", expenseId: "expense-1" },
+      { dueDate: "2026-02-28", status: "GENERATED", expenseId: "expense-2" },
+      { dueDate: "2026-03-28", status: "GENERATED", expenseId: "expense-3" },
+    ], { ...range, from: "2026-01-31" })).toEqual([]);
+  });
+
+  it("only selects an automatic period after its due date and respects cancellations", () => {
+    const automatic = { ...schedule, mode: "AUTOMATIC" as const, startDate: "2026-03-15", payableDayOfMonth: null };
+    expect(listRecurringDatesNeedingSync(automatic, [], range)).toEqual(["2026-03-15"]);
+    expect(listRecurringDatesNeedingSync(automatic, [
+      { dueDate: "2026-03-15", status: "CANCELLED", expenseId: null },
+    ], range)).toEqual([]);
+    expect(listRecurringDatesNeedingSync({ ...automatic, startDate: "2026-03-25" }, [], range)).toEqual([]);
+  });
+});
 
 describe("listRecurringDueDates", () => {
   it("lists automatic monthly due dates inside the requested window", () => {
