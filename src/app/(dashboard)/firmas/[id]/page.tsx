@@ -1,12 +1,12 @@
 import { getSignatureOriginalDocumentUrl, getSignatureRequest } from "@/actions/signatures";
 import { SignatureEventTimeline } from "@/components/signatures/signature-event-timeline";
+import { SignatureDocumentPreview } from "@/components/signatures/signature-document-preview";
 import { SignatureRecipientStatusList } from "@/components/signatures/signature-recipient-status-list";
 import { SignatureRequestActions } from "@/components/signatures/signature-request-actions";
 import { PageHeader } from "@/components/system/page-header";
 import { SectionCard } from "@/components/system/section-card";
 import { StatusChip } from "@/components/system/status-chip";
 import { Button } from "@/components/ui/button";
-import { getSignaturePlacementColor } from "@/lib/signature-placement-colors";
 import { getSignatureStatusLabel, getSignatureStatusTone } from "@/lib/signature-status";
 import { formatDateTime } from "@/lib/utils";
 import { getWorkspaceAccess } from "@/lib/workspace-access";
@@ -16,19 +16,9 @@ import { notFound } from "next/navigation";
 
 type SignatureRequestDetail = NonNullable<Awaited<ReturnType<typeof getSignatureRequest>>>;
 type SignatureRecipientDetail = SignatureRequestDetail["recipients"][number];
-type SignaturePlacementDetail = SignatureRecipientDetail["placements"][number];
 
 function getRecipientName(recipient: SignatureRecipientDetail) {
   return recipient.fullName ?? ([recipient.firstName, recipient.lastName].filter(Boolean).join(" ") || recipient.email);
-}
-
-function placementStyle(placement: SignaturePlacementDetail) {
-  return {
-    left: `${Number(placement.placementX) * 100}%`,
-    top: `${Number(placement.placementY) * 100}%`,
-    width: `${Number(placement.placementWidth) * 100}%`,
-    height: `${Number(placement.placementHeight) * 100}%`,
-  };
 }
 
 export default async function FirmaDetallePage({ params }: { params: Promise<{ id: string }> }) {
@@ -105,43 +95,42 @@ export default async function FirmaDetallePage({ params }: { params: Promise<{ i
         <SectionCard
           eyebrow="Documento"
           title={request.document?.originalFileName ?? "Documento pendiente"}
-          description="Vista temporal del PDF original y posicion marcada para la firma."
+          description="PDF original y espacios de firma tal como se ubicaron al crear la solicitud."
         >
-          <div className="relative mx-auto h-[min(78vh,980px)] min-h-[520px] w-full max-w-5xl overflow-hidden rounded-[28px] border border-border/80 bg-white">
+          <div className="grid gap-6 xl:grid-cols-[minmax(0,0.85fr)_minmax(320px,1.15fr)]">
+            <div className="rounded-[24px] border border-border/70 bg-white/85 p-5 text-sm leading-6">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Archivo original</p>
+              <p className="mt-2 break-words font-medium text-foreground">
+                {request.document?.originalFileName ?? "Documento pendiente"}
+              </p>
+              <p className="mt-3 text-muted-foreground">
+                Esta vista muestra los espacios guardados para cada firmante. Podes recorrer las paginas sin modificar la solicitud.
+              </p>
+            </div>
             {documentUrl ? (
-              <object data={documentUrl} type="application/pdf" className="h-full w-full" aria-label="PDF original">
-                <div className="flex h-full items-center justify-center p-6 text-center text-sm text-muted-foreground">
-                  No se pudo renderizar el PDF en este navegador.
-                </div>
-              </object>
+              <SignatureDocumentPreview
+                key={request.id}
+                previewUrl={documentUrl}
+                recipients={request.recipients.map((recipient) => ({
+                  id: recipient.id,
+                  label: getRecipientName(recipient),
+                }))}
+                placements={request.recipients.flatMap((recipient) =>
+                  recipient.placements.map((placement) => ({
+                    id: placement.id,
+                    recipientId: recipient.id,
+                    pageNumber: placement.pageNumber,
+                    x: Number(placement.placementX),
+                    y: Number(placement.placementY),
+                    width: Number(placement.placementWidth),
+                    height: Number(placement.placementHeight),
+                  }))
+                )}
+              />
             ) : (
-              <div className="flex h-full items-center justify-center p-6 text-center text-sm text-muted-foreground">
+              <div className="flex min-h-[28rem] items-center justify-center rounded-[28px] border border-border/80 bg-muted/20 p-6 text-center text-sm text-muted-foreground">
                 El documento todavia no esta disponible para previsualizar.
               </div>
-            )}
-
-            {request.recipients.map((recipient, recipientIndex) =>
-              recipient.placements.map((placement, placementIndex) => {
-                const color = getSignaturePlacementColor(recipientIndex);
-                return (
-                  <div
-                    key={placement.id}
-                    className="pointer-events-none absolute rounded-[14px] border-2"
-                    style={{
-                      ...placementStyle(placement),
-                      borderColor: color.border,
-                      backgroundColor: color.background,
-                    }}
-                  >
-                    <span
-                      className="absolute -top-7 left-0 max-w-[13rem] truncate rounded-full px-3 py-1 text-[0.68rem] font-semibold text-white"
-                      style={{ backgroundColor: color.label }}
-                    >
-                      {getRecipientName(recipient)} #{placementIndex + 1}
-                    </span>
-                  </div>
-                );
-              })
             )}
           </div>
         </SectionCard>

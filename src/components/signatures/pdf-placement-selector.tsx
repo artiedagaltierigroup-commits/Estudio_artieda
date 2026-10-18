@@ -19,9 +19,11 @@ interface PdfPlacementSelectorProps {
   previewUrl: string | null;
   recipients?: PdfPlacementRecipient[];
   onReadyChange?: (ready: boolean) => void;
+  readOnly?: boolean;
+  initialPlacements?: SignaturePlacementDraft[];
 }
 
-interface SignaturePlacementDraft {
+export interface SignaturePlacementDraft {
   id: string;
   recipientId: string;
   pageNumber: number;
@@ -60,7 +62,13 @@ function getRecipientLabel(recipient: PdfPlacementRecipient, index: number) {
   return recipient.label.trim() || `Destinatario ${index + 1}`;
 }
 
-export function PdfPlacementSelector({ previewUrl, recipients = [], onReadyChange }: PdfPlacementSelectorProps) {
+export function PdfPlacementSelector({
+  previewUrl,
+  recipients = [],
+  onReadyChange,
+  readOnly = false,
+  initialPlacements = [],
+}: PdfPlacementSelectorProps) {
   const pageContainerRef = useRef<HTMLDivElement | null>(null);
   const normalizedRecipients = useMemo(
     () => (recipients.length > 0 ? recipients : [{ id: "legacy-recipient", label: "Firma" }]),
@@ -71,7 +79,7 @@ export function PdfPlacementSelector({ previewUrl, recipients = [], onReadyChang
   const [pageWidth, setPageWidth] = useState(0);
   const [activeRecipientId, setActiveRecipientId] = useState(normalizedRecipients[0]?.id ?? "");
   const [placements, setPlacements] = useState<SignaturePlacementDraft[]>(() =>
-    normalizedRecipients[0] ? [buildDefaultPlacement(normalizedRecipients[0].id)] : []
+    readOnly ? initialPlacements : normalizedRecipients[0] ? [buildDefaultPlacement(normalizedRecipients[0].id)] : []
   );
   const [activePlacementId, setActivePlacementId] = useState(() => placements[0]?.id ?? "");
 
@@ -107,6 +115,7 @@ export function PdfPlacementSelector({ previewUrl, recipients = [], onReadyChang
   }, [previewUrl]);
 
   useEffect(() => {
+    if (readOnly) return;
     const validRecipientIds = new Set(normalizedRecipients.map((recipient) => recipient.id));
 
     setPlacements((current) => {
@@ -117,7 +126,7 @@ export function PdfPlacementSelector({ previewUrl, recipients = [], onReadyChang
     });
 
     setActiveRecipientId((current) => (validRecipientIds.has(current) ? current : normalizedRecipients[0]?.id ?? ""));
-  }, [normalizedRecipients]);
+  }, [normalizedRecipients, readOnly]);
 
   useEffect(() => {
     const activeExists = activeRecipientPlacements.some((placement) => placement.id === activePlacementId);
@@ -125,8 +134,9 @@ export function PdfPlacementSelector({ previewUrl, recipients = [], onReadyChang
   }, [activePlacementId, activeRecipientPlacements]);
 
   useEffect(() => {
+    if (readOnly) return;
     onReadyChange?.(normalizedRecipients.length > 0 && missingRecipients.length === 0);
-  }, [missingRecipients.length, normalizedRecipients.length, onReadyChange]);
+  }, [missingRecipients.length, normalizedRecipients.length, onReadyChange, readOnly]);
 
   function updateActivePlacement(key: "x" | "y" | "width" | "height", value: number) {
     if (!activePlacement) return;
@@ -146,7 +156,7 @@ export function PdfPlacementSelector({ previewUrl, recipients = [], onReadyChang
   }
 
   function handlePreviewClick(event: React.MouseEvent<HTMLDivElement>) {
-    if (!previewUrl || !activePlacement) return;
+    if (readOnly || !previewUrl || !activePlacement) return;
 
     const bounds = event.currentTarget.getBoundingClientRect();
     const x = (event.clientX - bounds.left) / bounds.width - activePlacement.width / 2;
@@ -221,7 +231,7 @@ export function PdfPlacementSelector({ previewUrl, recipients = [], onReadyChang
             >
               <div
                 className="relative mx-auto overflow-hidden rounded-[28px] border border-border/80 bg-white shadow-[0_24px_80px_-62px_rgba(122,56,79,0.35)]"
-                onClick={handlePreviewClick}
+                onClick={readOnly ? undefined : handlePreviewClick}
               >
                 <Page
                   pageNumber={activePageNumber}
@@ -249,26 +259,28 @@ export function PdfPlacementSelector({ previewUrl, recipients = [], onReadyChang
                     <button
                       key={placement.id}
                       type="button"
+                      disabled={readOnly}
                       className={cn(
-                        "absolute rounded-[14px] text-left transition-all",
-                        isActivePlacement && "ring-2 ring-white ring-offset-2 ring-offset-transparent"
+                        "absolute rounded-[14px] text-left",
+                        !readOnly && "transition-all",
+                        !readOnly && isActivePlacement && "ring-2 ring-white ring-offset-2 ring-offset-transparent"
                       )}
                       style={{
                         left: `${placement.x * 100}%`,
                         top: `${placement.y * 100}%`,
                         width: `${placement.width * 100}%`,
                         height: `${placement.height * 100}%`,
-                        border: `${visualState.borderWidth}px solid ${visualState.color.border}`,
+                        border: `${readOnly ? 2 : visualState.borderWidth}px solid ${visualState.color.border}`,
                         backgroundColor: visualState.color.background,
-                        boxShadow: visualState.shadow,
-                        opacity: visualState.opacity,
+                        boxShadow: readOnly ? "none" : visualState.shadow,
+                        opacity: readOnly ? 1 : visualState.opacity,
                       }}
-                      onClick={(event) => {
+                      onClick={readOnly ? undefined : (event) => {
                         event.stopPropagation();
                         setActiveRecipientId(placement.recipientId);
                         setActivePlacementId(placement.id);
                       }}
-                      aria-label={`Seleccionar espacio ${placementNumber} de ${getRecipientLabel(recipient, recipientIndex)}`}
+                      aria-label={readOnly ? undefined : `Seleccionar espacio ${placementNumber} de ${getRecipientLabel(recipient, recipientIndex)}`}
                     >
                       <span
                         className="absolute -top-7 left-0 max-w-[13rem] truncate rounded-full px-3 py-1 text-[0.68rem] font-semibold text-white"
@@ -324,7 +336,7 @@ export function PdfPlacementSelector({ previewUrl, recipients = [], onReadyChang
         </div>
       )}
 
-      <SignaturePlacementEditor
+      {!readOnly ? <SignaturePlacementEditor
         recipients={normalizedRecipients.map((recipient, index) => ({
           id: recipient.id,
           label: getRecipientLabel(recipient, index),
@@ -337,8 +349,9 @@ export function PdfPlacementSelector({ previewUrl, recipients = [], onReadyChang
         onAddPlacement={handleAddPlacement}
         onDeletePlacement={handleDeletePlacement}
         onPlacementChange={updateActivePlacement}
-      />
+      /> : null}
 
+      {!readOnly ? <>
       <input type="hidden" name="pageNumber" value={firstPlacement.pageNumber} />
       <input type="hidden" name="placementX" value={firstPlacement.x.toFixed(4)} />
       <input type="hidden" name="placementY" value={firstPlacement.y.toFixed(4)} />
@@ -378,6 +391,7 @@ export function PdfPlacementSelector({ previewUrl, recipients = [], onReadyChang
           </Fragment>
         ));
       })}
+      </> : null}
     </div>
   );
 }
