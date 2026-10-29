@@ -41,7 +41,24 @@ export default async function EditReminderPage({ params }: { params: Promise<{ i
         <div className="space-y-2 sm:col-span-2"><Label htmlFor="title">Título</Label><Input id="title" name="title" required defaultValue={reminder.title} /></div>
         <div className="space-y-2"><Label htmlFor="reminderDate">Fecha y hora</Label><Input id="reminderDate" name="reminderDate" type="datetime-local" required defaultValue={toBusinessDateTimeInput(reminder.reminderDate)} /></div>
         <div className="space-y-2"><Label htmlFor="priority">Prioridad</Label><select id="priority" name="priority" defaultValue={reminder.priority} className={selectClass}><option value="LOW">Baja</option><option value="MEDIUM">Media</option><option value="HIGH">Alta</option></select></div>
-        {access.role === "ADMIN" ? <div className="space-y-2 sm:col-span-2"><Label htmlFor="assigneeUserId">Asignar a</Label><select id="assigneeUserId" name="assigneeUserId" defaultValue={reminder.assigneeUserId ?? ""} className={selectClass}><option value="">Solo para {access.displayName}</option>{references.assistants.map((assistant) => <option key={assistant.userId} value={assistant.userId}>{assistant.displayName}</option>)}</select></div> : <div className="rounded-2xl border border-border/70 bg-muted/30 px-4 py-3 text-sm text-muted-foreground sm:col-span-2">Asignada a {access.displayName}. Victoria también puede verla.</div>}
+        <div className="space-y-2 sm:col-span-2">
+          <Label htmlFor="assigneeUserId">Asignar a</Label>
+          <select id="assigneeUserId" name="assigneeUserId" defaultValue={reminder.assigneeUserId ?? ""} className={selectClass}>
+            {access.role === "ADMIN" ? (
+              <>
+                <option value="">Solo para {access.displayName}</option>
+                {references.assistants.map((assistant) => (
+                  <option key={assistant.userId} value={assistant.userId}>{assistant.displayName}</option>
+                ))}
+              </>
+            ) : (
+              <>
+                <option value={access.actorUserId}>{access.displayName}</option>
+                <option value="">Victoria</option>
+              </>
+            )}
+          </select>
+        </div>
         <div className="space-y-2"><Label htmlFor="clientId">Cliente</Label><select id="clientId" name="clientId" defaultValue={reminder.clientId ?? ""} className={selectClass}><option value="">General</option>{references.clients.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></div>
         <div className="space-y-2"><Label htmlFor="caseId">Caso</Label><select id="caseId" name="caseId" defaultValue={reminder.caseId ?? ""} className={selectClass}><option value="">Sin caso asociado</option>{references.cases.map((item) => <option key={item.id} value={item.id}>{item.clientName} - {item.title}</option>)}</select></div>
         <div className="space-y-2 sm:col-span-2"><Label htmlFor="description">Descripción</Label><Textarea id="description" name="description" defaultValue={reminder.description ?? ""} /></div>

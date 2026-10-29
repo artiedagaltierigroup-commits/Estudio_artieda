@@ -16,6 +16,7 @@ describe("task creation dialog", () => {
         action={vi.fn()}
         role="ADMIN"
         displayName="Victoria"
+        actorUserId="owner"
         references={references}
       />
     );
@@ -35,6 +36,7 @@ describe("task creation dialog", () => {
         action={vi.fn()}
         role="COLLABORATOR"
         displayName="Brisa"
+        actorUserId="staff"
         references={references}
       />
     );
@@ -44,5 +46,21 @@ describe("task creation dialog", () => {
     expect(source).toContain("DialogContent");
     expect(source).toContain("DialogTitle");
     expect(source).toContain("DialogDescription");
+  });
+
+  it("lets Brisa choose herself or Victoria and defaults to herself", () => {
+    const html = renderToStaticMarkup(
+      <CreateReminderForm
+        action={vi.fn()}
+        role="COLLABORATOR"
+        displayName="Brisa"
+        actorUserId="staff"
+        references={references}
+      />
+    );
+    expect(html).toContain('name="assigneeUserId"');
+    expect(html).toContain('value="staff" selected=""');
+    expect(html).toContain("Brisa");
+    expect(html).toContain("Victoria");
   });
 });

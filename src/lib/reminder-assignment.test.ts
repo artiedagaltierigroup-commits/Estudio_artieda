@@ -30,24 +30,32 @@ describe("reminder assignment", () => {
     expect(resolveReminderAssignee(briza, undefined, ["briza-id"])).toBe("briza-id");
   });
 
-  it("rejects an assignment field submitted by an assistant", () => {
-    expect(() => resolveReminderAssignee(briza, null, ["briza-id"])).toThrow("ASSIGNMENT_FORBIDDEN");
-    expect(() => resolveReminderAssignee(briza, "victoria-id", ["briza-id"])).toThrow("ASSIGNMENT_FORBIDDEN");
+  it("lets Brisa assign a task to herself or Victoria", () => {
+    expect(resolveReminderAssignee(briza, "briza-id", ["briza-id"])).toBe("briza-id");
+    expect(resolveReminderAssignee(briza, null, ["briza-id"])).toBeNull();
+    expect(resolveReminderAssignee(briza, "victoria-id", ["briza-id"])).toBeNull();
+  });
+
+  it("rejects Brisa assigning a task to another assistant or when she is disabled", () => {
+    expect(() => resolveReminderAssignee(briza, "other-id", ["briza-id", "other-id"])).toThrow("ASSIGNMENT_FORBIDDEN");
+    expect(() => resolveReminderAssignee(briza, null, [])).toThrow("INVALID_ASSIGNEE");
   });
 
   it("lets Victoria see every task in her office", () => {
-    expect(canAccessReminder(victoria, { userId: "victoria-id", assigneeUserId: null })).toBe(true);
-    expect(canAccessReminder(victoria, { userId: "victoria-id", assigneeUserId: "briza-id" })).toBe(true);
+    expect(canAccessReminder(victoria, { userId: "victoria-id", createdByUserId: "victoria-id", assigneeUserId: null })).toBe(true);
+    expect(canAccessReminder(victoria, { userId: "victoria-id", createdByUserId: "briza-id", assigneeUserId: "briza-id" })).toBe(true);
   });
 
-  it("only lets Brisa see tasks assigned to Brisa", () => {
-    expect(canAccessReminder(briza, { userId: "victoria-id", assigneeUserId: "briza-id" })).toBe(true);
-    expect(canAccessReminder(briza, { userId: "victoria-id", assigneeUserId: null })).toBe(false);
-    expect(canAccessReminder(briza, { userId: "victoria-id", assigneeUserId: "other-id" })).toBe(false);
+  it("lets Brisa see tasks she created or Victoria assigned to her", () => {
+    expect(canAccessReminder(briza, { userId: "victoria-id", createdByUserId: "briza-id", assigneeUserId: "briza-id" })).toBe(true);
+    expect(canAccessReminder(briza, { userId: "victoria-id", createdByUserId: "briza-id", assigneeUserId: null })).toBe(true);
+    expect(canAccessReminder(briza, { userId: "victoria-id", createdByUserId: "victoria-id", assigneeUserId: null })).toBe(false);
+    expect(canAccessReminder(briza, { userId: "victoria-id", createdByUserId: "victoria-id", assigneeUserId: "briza-id" })).toBe(true);
+    expect(canAccessReminder(briza, { userId: "victoria-id", createdByUserId: "other-id", assigneeUserId: "other-id" })).toBe(false);
   });
 
   it("never crosses office boundaries", () => {
-    expect(canAccessReminder(victoria, { userId: "another-office", assigneeUserId: null })).toBe(false);
-    expect(canAccessReminder(briza, { userId: "another-office", assigneeUserId: "briza-id" })).toBe(false);
+    expect(canAccessReminder(victoria, { userId: "another-office", createdByUserId: "victoria-id", assigneeUserId: null })).toBe(false);
+    expect(canAccessReminder(briza, { userId: "another-office", createdByUserId: "briza-id", assigneeUserId: "briza-id" })).toBe(false);
   });
 });

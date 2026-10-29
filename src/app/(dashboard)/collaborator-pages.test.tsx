@@ -9,6 +9,7 @@ import NewCasePage from "./casos/nuevo/page";
 import EditCasePage from "./casos/[id]/editar/page";
 import CalendarPage from "./calendario/page";
 import RemindersPage from "./recordatorios/page";
+import EditReminderPage from "./recordatorios/[id]/editar/page";
 import { CreateReminderForm } from "@/components/reminders/create-reminder-dialog";
 
 const state = vi.hoisted(() => ({
@@ -16,6 +17,7 @@ const state = vi.hoisted(() => ({
   finance: vi.fn(() => { throw new Error("Financial reader reached by collaborator"); }),
   operationalClients: vi.fn(async () => []),
   operationalCase: vi.fn(async () => ({ id: "case-id", title: "Caso de prueba", clientId: "client-id" })),
+  reminders: vi.fn(async () => [] as Array<Record<string, unknown>>),
 }));
 
 vi.mock("@/lib/workspace-access", () => ({ getWorkspaceAccess: async () => ({ actorUserId: state.role === "ADMIN" ? "owner" : "staff", ownerUserId: "owner", displayName: state.role === "ADMIN" ? "Victoria" : "Brisa", role: state.role }) }));
@@ -25,7 +27,7 @@ vi.mock("@/actions/cases", () => ({ getCases: state.finance, getCase: state.fina
 vi.mock("@/actions/calendar", () => ({ getCalendarEvents: state.finance }));
 vi.mock("@/actions/operational", () => ({ getOperationalClients: state.operationalClients, getOperationalCase: state.operationalCase, getOperationalCases: vi.fn(async () => []), getOperationalClient: vi.fn() }));
 vi.mock("@/actions/recurring-expense-occurrences", () => ({ getRecurringPayableChecklist: state.finance, getRecurringPayableAlerts: state.finance, markRecurringOccurrencePaid: vi.fn(), reopenRecurringOccurrence: vi.fn() }));
-vi.mock("@/actions/reminders", () => ({ getReminders: vi.fn(async () => []), getReminderReferences: vi.fn(async () => ({ clients: [], cases: [], assistants: [{ userId: "staff", displayName: "Brisa" }] })), createReminder: vi.fn(), completeReminder: vi.fn(), reopenReminder: vi.fn(), deleteReminder: vi.fn() }));
+vi.mock("@/actions/reminders", () => ({ getReminders: state.reminders, getReminderReferences: vi.fn(async () => ({ clients: [], cases: [], assistants: [{ userId: "staff", displayName: "Brisa" }] })), createReminder: vi.fn(), updateReminder: vi.fn(), completeReminder: vi.fn(), reopenReminder: vi.fn(), deleteReminder: vi.fn() }));
 
 describe("collaborator page data boundaries", () => {
   beforeEach(() => { vi.clearAllMocks(); state.role = "COLLABORATOR"; });
@@ -56,14 +58,27 @@ describe("collaborator page data boundaries", () => {
     expect(state.finance).not.toHaveBeenCalled();
   });
 
-  it("shows Brisa her automatic assignment without a reassignment control", async () => {
-    const html = renderToStaticMarkup(<CreateReminderForm action={vi.fn()} role="COLLABORATOR" displayName="Brisa" references={{ clients: [], cases: [], assistants: [{ userId: "staff", displayName: "Brisa" }] }} />);
-    expect(html).toContain("Esta tarea quedará asignada a Brisa");
-    expect(html).not.toContain('name="assigneeUserId"');
+  it("lets Brisa assign a new task to herself or Victoria", async () => {
+    const html = renderToStaticMarkup(<CreateReminderForm action={vi.fn()} role="COLLABORATOR" displayName="Brisa" actorUserId="staff" references={{ clients: [], cases: [], assistants: [{ userId: "staff", displayName: "Brisa" }] }} />);
+    expect(html).toContain('name="assigneeUserId"');
+    expect(html).toContain("Brisa");
+    expect(html).toContain("Victoria");
+  });
+
+  it("lets Brisa reassign a task she created for Victoria while editing", async () => {
+    state.reminders.mockResolvedValueOnce([{
+      id: "task-id", userId: "owner", createdByUserId: "staff", assigneeUserId: null,
+      title: "Para Victoria", reminderDate: new Date("2026-10-29T12:00:00Z"),
+      priority: "MEDIUM", clientId: null, caseId: null, description: null,
+    }]);
+    const html = renderToStaticMarkup(await EditReminderPage({ params: Promise.resolve({ id: "task-id" }) }));
+    expect(html).toContain('name="assigneeUserId"');
+    expect(html).toContain("Brisa");
+    expect(html).toContain("Victoria");
   });
 
   it("lets Victoria choose herself or Brisa", async () => {
-    const html = renderToStaticMarkup(<CreateReminderForm action={vi.fn()} role="ADMIN" displayName="Victoria" references={{ clients: [], cases: [], assistants: [{ userId: "staff", displayName: "Brisa" }] }} />);
+    const html = renderToStaticMarkup(<CreateReminderForm action={vi.fn()} role="ADMIN" displayName="Victoria" actorUserId="owner" references={{ clients: [], cases: [], assistants: [{ userId: "staff", displayName: "Brisa" }] }} />);
     expect(html).toContain('name="assigneeUserId"');
     expect(html).toContain("Solo para Victoria");
     expect(html).toContain("Brisa");

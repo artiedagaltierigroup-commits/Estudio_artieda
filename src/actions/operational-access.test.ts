@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { PgDialect } from "drizzle-orm/pg-core";
 import { createCase, getCase, getCaseRecord, getCases, updateCase, updateCaseStatus } from "./cases";
 import { createClientAction, deleteClient, getClient, getClients, updateClient } from "./clients";
 import { completeReminder, createReminder, deleteReminder, getReminders, reopenReminder, updateReminder } from "./reminders";
@@ -59,7 +60,7 @@ beforeEach(() => {
   mocks.clientMany.mockResolvedValue([]);
   mocks.caseFirst.mockResolvedValue(currentCase);
   mocks.caseMany.mockResolvedValue([]);
-  mocks.reminderFirst.mockResolvedValue({ id: "reminder", userId: owner, assigneeUserId: actor, completed: false });
+  mocks.reminderFirst.mockResolvedValue({ id: "reminder", userId: owner, createdByUserId: actor, assigneeUserId: actor, completed: false });
   mocks.reminderMany.mockResolvedValue([]);
   mocks.workspaceMany.mockResolvedValue([{ userId: actor, displayName: "Brisa" }, { userId: owner, displayName: "Victoria" }]);
   mocks.insert.mockReturnValue({ values: mocks.values });
@@ -117,6 +118,33 @@ describe("operational role boundaries", () => {
     for (const call of mocks.log.mock.calls) expect(call[0]).toMatchObject({ userId: owner, actorUserId: actor });
   });
 
+  it.each(["", owner])("lets Brisa create a task for Victoria with assignment value %s", async assigneeUserId => {
+    expect(await createReminder(form({ title: "Para Victoria", reminderDate: "2099-01-01", assigneeUserId }))).toHaveProperty("success", true);
+    expect(mocks.values).toHaveBeenCalledWith(expect.objectContaining({
+      userId: owner, createdByUserId: actor, assigneeUserId: null,
+    }));
+  });
+
+  it("lets Brisa see and update a task she created for Victoria", async () => {
+    const task = { id: "reminder", userId: owner, createdByUserId: actor, assigneeUserId: null, title: "Para Victoria", case: null, client: null, completed: false };
+    mocks.reminderMany.mockResolvedValue([task]);
+    mocks.reminderFirst.mockResolvedValue(task);
+
+    expect((await getReminders()).map((item) => item.title)).toEqual(["Para Victoria"]);
+    expect(await updateReminder("reminder", form({ title: "Editada", reminderDate: "2099-01-01", assigneeUserId: actor }))).toHaveProperty("success", true);
+    expect(mocks.set).toHaveBeenCalledWith(expect.objectContaining({ assigneeUserId: actor }));
+    expect(await updateReminder("reminder", form({ title: "De vuelta para Victoria", reminderDate: "2099-01-01", assigneeUserId: "" }))).toHaveProperty("success", true);
+    expect(mocks.set).toHaveBeenCalledWith(expect.objectContaining({ assigneeUserId: null }));
+    expect(await completeReminder("reminder")).toHaveProperty("success", true);
+    expect(await reopenReminder("reminder")).toHaveProperty("success", true);
+    for (const call of mocks.where.mock.calls) {
+      const condition = new PgDialect().sqlToQuery(call[0]);
+      expect(condition.sql).toContain("created_by_user_id");
+      expect(condition.sql).toContain("assignee_user_id");
+      expect(condition.sql).toMatch(/\bor\b/);
+    }
+  });
+
   it.each(["INVALID", undefined, null])("rejects invalid status %s before an update", async status => {
     expect(await updateCaseStatus(caseId, status as "ACTIVE")).toHaveProperty("error");
     expect(mocks.update).not.toHaveBeenCalled();
@@ -151,6 +179,7 @@ describe("operational role boundaries", () => {
   });
 
   it("uses a neutral creator label when the original account no longer exists", async () => {
+    mocks.role = "ADMIN";
     mocks.reminderMany.mockResolvedValue([{
       id: "reminder", userId: owner, createdByUserId: null, assigneeUserId: actor, title: "Histórica", case: null, client: null,
     }]);
@@ -166,6 +195,18 @@ describe("operational role boundaries", () => {
     expect(await completeReminder("private")).toHaveProperty("error");
     expect(await reopenReminder("private")).toHaveProperty("error");
     expect(mocks.update).not.toHaveBeenCalled();
+  });
+
+  it("keeps Victoria-created tasks assigned to Brisa visible and editable", async () => {
+    const ownerTask = { id: "owner-task", userId: owner, createdByUserId: owner, assigneeUserId: actor, title: "Creada por Victoria", case: null, client: null, completed: false };
+    mocks.reminderMany.mockResolvedValue([ownerTask]);
+    mocks.reminderFirst.mockResolvedValue(ownerTask);
+    expect((await getReminders()).map((item) => item.title)).toEqual(["Creada por Victoria"]);
+    expect(await updateReminder("owner-task", form({ title: "Actualizada", reminderDate: "2099-01-01", assigneeUserId: actor }))).toHaveProperty("success", true);
+    const condition = new PgDialect().sqlToQuery(mocks.where.mock.calls.at(-1)![0]);
+    expect(condition.sql).toContain("created_by_user_id");
+    expect(condition.sql).toContain("assignee_user_id");
+    expect(condition.sql).toMatch(/\bor\b/);
   });
 
   it("lets Victoria assign a task to Brisa", async () => {
@@ -205,10 +246,18 @@ describe("operational role boundaries", () => {
     mocks.clientFirst.mockResolvedValue({
       ...client,
       cases: [],
-      reminders: [{ id: "reminder", userId: owner, createdByUserId: owner, assigneeUserId: actor, title: "Seguimiento", description: null, reminderDate: new Date(), priority: "MEDIUM", completed: false, completedAt: null, createdAt: new Date(), updatedAt: new Date() }],
+      reminders: [{ id: "reminder", userId: owner, createdByUserId: actor, assigneeUserId: actor, title: "Seguimiento", description: null, reminderDate: new Date(), priority: "MEDIUM", completed: false, completedAt: null, createdAt: new Date(), updatedAt: new Date() }],
     });
     const result = await getOperationalClient(clientId);
-    expect(result?.reminders[0]).toMatchObject({ assigneeName: "Brisa", creatorName: "Victoria" });
+    expect(result?.reminders[0]).toMatchObject({ assigneeName: "Brisa", creatorName: "Brisa" });
+  });
+
+  it("hides Victoria's private tasks from Brisa in client and case details", async () => {
+    const ownerTask = { id: "owner-task", userId: owner, createdByUserId: owner, assigneeUserId: null, title: "Privada de Victoria", description: null, reminderDate: new Date(), priority: "MEDIUM", completed: false, completedAt: null, createdAt: new Date(), updatedAt: new Date() };
+    mocks.clientFirst.mockResolvedValue({ ...client, cases: [], reminders: [ownerTask] });
+    mocks.caseFirst.mockResolvedValue({ ...currentCase, reminders: [ownerTask] });
+    expect((await getOperationalClient(clientId))?.reminders).toEqual([]);
+    expect((await getOperationalCase(caseId))?.reminders).toEqual([]);
   });
 
   it("hides legacy cases linked to another office", async () => {

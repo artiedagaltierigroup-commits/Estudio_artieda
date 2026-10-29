@@ -99,6 +99,7 @@ export default async function RecordatoriosPage() {
             action={handleCreate}
             role={access.role}
             displayName={access.displayName}
+            actorUserId={access.actorUserId}
             references={references}
           />
         }

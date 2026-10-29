@@ -8,6 +8,7 @@ type AssignmentAccess = {
 
 type ReminderScope = {
   userId: string;
+  createdByUserId: string | null;
   assigneeUserId: string | null;
 };
 
@@ -17,9 +18,10 @@ export function resolveReminderAssignee(
   enabledAssistantIds: readonly string[],
 ) {
   if (access.role === "COLLABORATOR") {
-    if (requestedAssigneeId !== undefined) throw new Error("ASSIGNMENT_FORBIDDEN");
     if (!enabledAssistantIds.includes(access.actorUserId)) throw new Error("INVALID_ASSIGNEE");
-    return access.actorUserId;
+    if (requestedAssigneeId === undefined || requestedAssigneeId === access.actorUserId) return access.actorUserId;
+    if (requestedAssigneeId === null || requestedAssigneeId === access.ownerUserId) return null;
+    throw new Error("ASSIGNMENT_FORBIDDEN");
   }
 
   if (!requestedAssigneeId) return null;
@@ -29,5 +31,7 @@ export function resolveReminderAssignee(
 
 export function canAccessReminder(access: AssignmentAccess, reminder: ReminderScope) {
   if (reminder.userId !== access.ownerUserId) return false;
-  return access.role === "ADMIN" || reminder.assigneeUserId === access.actorUserId;
+  return access.role === "ADMIN" ||
+    reminder.createdByUserId === access.actorUserId ||
+    reminder.assigneeUserId === access.actorUserId;
 }

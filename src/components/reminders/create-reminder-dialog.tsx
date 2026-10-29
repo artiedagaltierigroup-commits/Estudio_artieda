@@ -27,6 +27,7 @@ interface CreateReminderProps {
   action: (formData: FormData) => void | Promise<void>;
   role: "ADMIN" | "COLLABORATOR";
   displayName: string;
+  actorUserId: string;
   references: ReminderReferences;
 }
 
@@ -37,6 +38,7 @@ export function CreateReminderForm({
   action,
   role,
   displayName,
+  actorUserId,
   references,
   cancelControl,
 }: CreateReminderProps & { cancelControl?: ReactNode }) {
@@ -62,8 +64,12 @@ export function CreateReminderForm({
             </select>
           </div>
         ) : (
-          <div className="rounded-2xl border border-border/70 bg-muted/30 px-4 py-3 text-sm text-muted-foreground sm:col-span-2">
-            Esta tarea quedará asignada a {displayName} y también será visible para Victoria.
+          <div className="space-y-2 sm:col-span-2">
+            <Label htmlFor="create-reminder-assignee">Asignar a</Label>
+            <select id="create-reminder-assignee" name="assigneeUserId" className={selectClassName} defaultValue={actorUserId}>
+              <option value={actorUserId}>{displayName}</option>
+              <option value="">Victoria</option>
+            </select>
           </div>
         )}
         <div className="space-y-2">

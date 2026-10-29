@@ -69,7 +69,7 @@ describe.skipIf(!localUrl)("shared operational actions against a real isolated d
       { id: otherCaseId, userId: outsider, clientId: otherClientId, title: "Caso ajeno", fee: "123.45" },
     ]);
     await db.insert(reminders).values([
-      { id: reminderId, userId: owner, createdByUserId: owner, assigneeUserId: collaborator, clientId, caseId, title: "Recordatorio compartido 500", reminderDate: new Date("2099-01-01T12:00:00Z") },
+      { id: reminderId, userId: owner, createdByUserId: collaborator, assigneeUserId: collaborator, clientId, caseId, title: "Recordatorio compartido 500", reminderDate: new Date("2099-01-01T12:00:00Z") },
       { id: otherReminderId, userId: outsider, createdByUserId: outsider, clientId: otherClientId, caseId: otherCaseId, title: "Recordatorio ajeno", reminderDate: new Date("2099-01-01T12:00:00Z") },
     ]);
   });
@@ -122,6 +122,42 @@ describe.skipIf(!localUrl)("shared operational actions against a real isolated d
     expect(edited).toMatchObject({ fee: "9876.54", preferredPaymentMethod: "CASH", title: "Título actualizado", status: "SUSPENDED" });
   });
 
+  it("lets Brisa assign a task she created to Victoria and keeps both able to edit it", async () => {
+    expect(await createReminder(form({ title: "Encargo a Victoria", reminderDate: "2099-02-01", assigneeUserId: "" }))).toHaveProperty("success", true);
+    const created = await db.query.reminders.findFirst({ where: (row, { eq }) => eq(row.title, "Encargo a Victoria") });
+    expect(created).toMatchObject({ userId: owner, createdByUserId: collaborator, assigneeUserId: null });
+    expect((await getReminders()).some((item) => item.id === created?.id)).toBe(true);
+    expect(await updateReminder(created!.id, form({ title: "Encargo actualizado", reminderDate: "2099-02-02", assigneeUserId: collaborator }))).toHaveProperty("success", true);
+    state.actor = owner;
+    state.role = "ADMIN";
+    expect((await getReminders()).some((item) => item.id === created?.id)).toBe(true);
+    expect(await updateReminder(created!.id, form({ title: "Victoria editó", reminderDate: "2099-02-03" }))).toHaveProperty("success", true);
+  });
+
+  it("shows Victoria-created tasks assigned to Brisa but hides Victoria's private tasks", async () => {
+    const ownerTaskId = randomUUID();
+    const privateTaskId = randomUUID();
+    await db.insert(reminders).values({
+      id: ownerTaskId, userId: owner, createdByUserId: owner, assigneeUserId: collaborator,
+      clientId, caseId, title: "Tarea de Victoria", reminderDate: new Date("2099-02-01T12:00:00Z"),
+    });
+    await db.insert(reminders).values({
+      id: privateTaskId, userId: owner, createdByUserId: owner, assigneeUserId: null,
+      clientId, caseId, title: "Privada de Victoria", reminderDate: new Date("2099-02-01T12:00:00Z"),
+    });
+    expect((await getReminders()).some((item) => item.id === ownerTaskId)).toBe(true);
+    expect((await getReminders()).some((item) => item.id === privateTaskId)).toBe(false);
+    expect((await getOperationalClient(clientId))?.reminders.some((item) => item.id === ownerTaskId)).toBe(true);
+    expect((await getOperationalCase(caseId))?.reminders.some((item) => item.id === privateTaskId)).toBe(false);
+    expect(await updateReminder(ownerTaskId, form({ title: "Actualizada", reminderDate: "2099-03-01" }))).toHaveProperty("success", true);
+    expect(await updateReminder(privateTaskId, form({ title: "Intento", reminderDate: "2099-03-01" }))).toHaveProperty("error");
+    expect(await completeReminder(privateTaskId)).toHaveProperty("error");
+    expect(await reopenReminder(privateTaskId)).toHaveProperty("error");
+    state.actor = owner;
+    state.role = "ADMIN";
+    expect((await getReminders()).some((item) => item.id === privateTaskId)).toBe(true);
+  });
+
   it("refuses financial writes, rich reads and deletion without changing data", async () => {
     for (const field of ["fee", "preferredPaymentMethod"]) {
       expect(await createCase(form({ clientId, title: "Prohibido", [field]: "" }))).toHaveProperty("error");
@@ -158,8 +194,8 @@ describe.skipIf(!localUrl)("shared operational actions against a real isolated d
     const clientDetail = await getClient(clientId);
     expect(caseDetail).toHaveProperty("fee", "111.11");
     expect(clientDetail).toHaveProperty("financeSummary");
-    expect(caseDetail?.reminders[0]).toMatchObject({ assigneeName: "Brisa", creatorName: "Victoria" });
-    expect(clientDetail?.reminders[0]).toMatchObject({ assigneeName: "Brisa", creatorName: "Victoria" });
+    expect(caseDetail?.reminders[0]).toMatchObject({ assigneeName: "Brisa", creatorName: "Brisa" });
+    expect(clientDetail?.reminders[0]).toMatchObject({ assigneeName: "Brisa", creatorName: "Brisa" });
     expect(await deleteReminder(reminderId)).toHaveProperty("success", true);
     expect(await deleteClient(clientId)).toHaveProperty("success", true);
     expect(await db.query.clients.findMany()).toHaveLength(1);

@@ -1,6 +1,6 @@
 "use server";
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, or } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db } from "@/db";
@@ -49,7 +49,10 @@ function reminderMutationWhere(access: Awaited<ReturnType<typeof getWorkspaceAcc
   const officeReminder = and(eq(reminders.id, id), eq(reminders.userId, access.ownerUserId));
   return access.role === "ADMIN"
     ? officeReminder
-    : and(officeReminder, eq(reminders.assigneeUserId, access.actorUserId));
+    : and(officeReminder, or(
+      eq(reminders.createdByUserId, access.actorUserId),
+      eq(reminders.assigneeUserId, access.actorUserId),
+    ));
 }
 
 export async function getReminders() {
